@@ -1,0 +1,66 @@
+using DataWorkflows.Connector.Monday.Application.Interfaces;
+using DataWorkflows.Connector.Monday.Infrastructure;
+using DataWorkflows.Connector.Monday.Presentation.Middleware;
+using Polly;
+using Polly.Extensions.Http;
+
+var builder = WebApplication.CreateBuilder(args);
+
+// Add services to the container
+builder.Services.AddControllers();
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen(c =>
+{
+    c.SwaggerDoc("v1", new() { Title = "Monday Connector API", Version = "v1" });
+});
+
+// Add MediatR
+builder.Services.AddMediatR(cfg => cfg.RegisterServicesFromAssembly(typeof(Program).Assembly));
+
+// Add exception handling
+builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
+builder.Services.AddProblemDetails();
+
+// Configure Polly retry policy with exponential backoff
+var retryPolicy = HttpPolicyExtensions
+    .HandleTransientHttpError()
+    .WaitAndRetryAsync(
+        retryCount: 3,
+        sleepDurationProvider: retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)));
+
+// Add HTTP client with Polly for MondayApiClient
+builder.Services.AddHttpClient<IMondayApiClient, MondayApiClient>()
+    .AddPolicyHandler(retryPolicy);
+
+// Add column resolution services
+builder.Services.AddMemoryCache();
+builder.Services.AddSingleton<IColumnMetadataCache, InMemoryColumnMetadataCache>();
+builder.Services.AddScoped<IColumnResolverService, ColumnResolverService>();
+
+// Add column value parsing and filtering services
+builder.Services.AddScoped<IColumnValueParser, ColumnValueParser>();
+builder.Services.AddScoped<IItemFilterService, ItemFilterService>();
+
+var app = builder.Build();
+
+// Configure the HTTP request pipeline
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI(c => c.SwaggerEndpoint("/swagger/v1/swagger.json", "Monday Connector API v1"));
+}
+
+// Add exception handling middleware
+app.UseExceptionHandler();
+
+// Add correlation ID middleware
+app.UseMiddleware<CorrelationIdMiddleware>();
+
+app.UseHttpsRedirection();
+app.UseAuthorization();
+app.MapControllers();
+
+app.Run();
+
+// Make the Program class public for integration testing
+public partial class Program { }

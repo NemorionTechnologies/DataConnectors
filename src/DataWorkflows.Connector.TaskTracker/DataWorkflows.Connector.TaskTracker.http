@@ -1,0 +1,6 @@
+@DataWorkflows.Connector.TaskTracker_HostAddress = http://localhost:5201
+
+GET {{DataWorkflows.Connector.TaskTracker_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

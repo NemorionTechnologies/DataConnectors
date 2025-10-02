@@ -1,0 +1,11 @@
+{
+  "Monday": {
+    "BoardId": "${MONDAY_BOARD_ID}",
+    "StatusColumnTitle": "${MONDAY_STATUS_COLUMN_TITLE}",
+    "StatusLabel": "${MONDAY_STATUS_LABEL}",
+    "TimelineColumnTitle": "${MONDAY_TIMELINE_COLUMN_TITLE}",
+    "LinkColumnTitle": "${MONDAY_LINK_COLUMN_TITLE}",
+    "TestItemId": "${MONDAY_TEST_ITEM_ID}",
+    "ApiKey": "${MONDAY_API_TOKEN}"
+  }
+}

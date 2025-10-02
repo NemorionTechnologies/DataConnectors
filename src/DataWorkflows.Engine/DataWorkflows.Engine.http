@@ -1,0 +1,6 @@
+@DataWorkflows.Engine_HostAddress = http://localhost:5131
+
+GET {{DataWorkflows.Engine_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

@@ -1,0 +1,14 @@
+{
+  "Monday": {
+    "BoardId": "YOUR_BOARD_ID_HERE",
+    "StatusColumnId": "status",
+    "StatusLabel": "Working on it",
+    "TestItemId": "",
+    "ApiKey": "YOUR_MONDAY_API_TOKEN_HERE"
+  },
+  "Logging": {
+    "LogLevel": {
+      "Default": "Information"
+    }
+  }
+}

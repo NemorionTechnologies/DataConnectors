@@ -1,0 +1,150 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: dataworkflows-postgres
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB:-dataworkflows}
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./database/init:/docker-entrypoint-initdb.d
+    networks:
+      - dataworkflows-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  workflow-engine:
+    build:
+      context: .
+      dockerfile: src/DataWorkflows.Engine/Dockerfile
+    container_name: dataworkflows-engine
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:80
+      - ConnectionStrings__DefaultConnection=${CONNECTION_STRING}
+    ports:
+      - "5001:80"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - dataworkflows-network
+
+  slack-bot:
+    build:
+      context: .
+      dockerfile: src/DataWorkflows.SlackBot/Dockerfile
+    container_name: dataworkflows-slackbot
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:80
+      - WorkflowEngine__BaseUrl=http://workflow-engine:80
+      - SlackConnector__BaseUrl=http://slack-connector:80
+    ports:
+      - "5002:80"
+    depends_on:
+      - workflow-engine
+      - slack-connector
+    networks:
+      - dataworkflows-network
+
+  slack-connector:
+    build:
+      context: .
+      dockerfile: src/DataWorkflows.Connector.Slack/Dockerfile
+    container_name: dataworkflows-connector-slack
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:80
+      - Slack__ApiToken=${SLACK_API_TOKEN}
+    ports:
+      - "5010:80"
+    networks:
+      - dataworkflows-network
+
+  confluence-connector:
+    build:
+      context: .
+      dockerfile: src/DataWorkflows.Connector.Confluence/Dockerfile
+    container_name: dataworkflows-connector-confluence
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:80
+      - Confluence__BaseUrl=${CONFLUENCE_BASE_URL}
+      - Confluence__ApiToken=${CONFLUENCE_API_TOKEN}
+    ports:
+      - "5011:80"
+    networks:
+      - dataworkflows-network
+
+  monday-connector:
+    build:
+      context: .
+      dockerfile: src/DataWorkflows.Connector.Monday/Dockerfile
+    container_name: dataworkflows-connector-monday
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:80
+      - Monday__ApiToken=${MONDAY_API_TOKEN}
+    ports:
+      - "5012:80"
+    networks:
+      - dataworkflows-network
+
+  outlook-connector:
+    build:
+      context: .
+      dockerfile: src/DataWorkflows.Connector.Outlook/Dockerfile
+    container_name: dataworkflows-connector-outlook
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:80
+      - MicrosoftGraph__TenantId=${MICROSOFT_TENANT_ID}
+      - MicrosoftGraph__ClientId=${MICROSOFT_CLIENT_ID}
+      - MicrosoftGraph__ClientSecret=${MICROSOFT_CLIENT_SECRET}
+    ports:
+      - "5013:80"
+    networks:
+      - dataworkflows-network
+
+  tasktracker-connector:
+    build:
+      context: .
+      dockerfile: src/DataWorkflows.Connector.TaskTracker/Dockerfile
+    container_name: dataworkflows-connector-tasktracker
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:80
+      - TaskTracker__BaseUrl=http://tasktracker-mock:80
+    ports:
+      - "5014:80"
+    depends_on:
+      - tasktracker-mock
+    networks:
+      - dataworkflows-network
+
+  tasktracker-mock:
+    build:
+      context: .
+      dockerfile: src/DataWorkflows.TaskTracker.MockApi/Dockerfile
+    container_name: dataworkflows-tasktracker-mock
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:80
+    ports:
+      - "5020:80"
+    networks:
+      - dataworkflows-network
+
+volumes:
+  postgres-data:
+
+networks:
+  dataworkflows-network:
+    driver: bridge

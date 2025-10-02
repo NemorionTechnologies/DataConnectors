@@ -1,0 +1,6 @@
+@DataWorkflows.Connector.Monday_HostAddress = http://localhost:5192
+
+GET {{DataWorkflows.Connector.Monday_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

@@ -1,0 +1,6 @@
+@DataWorkflows.TaskTracker.MockApi_HostAddress = http://localhost:5118
+
+GET {{DataWorkflows.TaskTracker.MockApi_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
