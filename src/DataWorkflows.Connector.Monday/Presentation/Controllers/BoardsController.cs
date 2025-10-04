@@ -33,10 +33,11 @@ public class BoardsController : ControllerBase
     [HttpGet("{boardId}/items")]
     public async Task<ActionResult<IEnumerable<MondayItemDto>>> GetItemsByBoardIdAsync(
         string boardId,
-        [FromQuery] GetItemsFilterModel filter,
+        [FromQuery] GetItemsFilterModel? filter,
         CancellationToken cancellationToken)
     {
-        var query = new GetBoardItemsQuery(boardId, filter ?? new GetItemsFilterModel());
+        var filterDefinition = GetItemsFilterModel.ToFilterDefinition(filter);
+        var query = new GetBoardItemsQuery(boardId, filterDefinition);
         var result = await _mediator.Send(query, cancellationToken);
         return Ok(result);
     }
@@ -77,10 +78,11 @@ public class BoardsController : ControllerBase
     [HttpGet("{boardId}/hydrated-items")]
     public async Task<ActionResult<IEnumerable<MondayHydratedItemDto>>> GetHydratedItemsByBoardIdAsync(
         string boardId,
-        [FromQuery] GetItemsFilterModel filter,
+        [FromQuery] GetItemsFilterModel? filter,
         CancellationToken cancellationToken)
     {
-        var query = new GetHydratedBoardItemsQuery(boardId, filter ?? new GetItemsFilterModel());
+        var filterDefinition = GetItemsFilterModel.ToFilterDefinition(filter);
+        var query = new GetHydratedBoardItemsQuery(boardId, filterDefinition);
         var result = await _mediator.Send(query, cancellationToken);
         return Ok(result);
     }
@@ -107,3 +109,4 @@ public class BoardsController : ControllerBase
         return NoContent();
     }
 }
+

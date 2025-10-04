@@ -1,4 +1,5 @@
 using DataWorkflows.Connector.Monday.Application.DTOs;
+using DataWorkflows.Connector.Monday.Application.Filters;
 using DataWorkflows.Connector.Monday.Application.Interfaces;
 using DataWorkflows.Connector.Monday.Application.Queries.GetBoardItems;
 using FluentAssertions;
@@ -25,7 +26,7 @@ public class GetBoardItemsQueryHandlerTests
     {
         // Arrange
         var boardId = "123";
-        var filter = new GetItemsFilterModel();
+        var filter = MondayFilterDefinition.Empty;
         var expectedItems = new List<MondayItemDto>
         {
             new MondayItemDto
@@ -58,7 +59,7 @@ public class GetBoardItemsQueryHandlerTests
     {
         // Arrange
         var boardId = "123";
-        var filter = new GetItemsFilterModel();
+        var filter = MondayFilterDefinition.Empty;
         var expectedItems = new List<MondayItemDto>();
 
         _mockApiClient
@@ -75,3 +76,4 @@ public class GetBoardItemsQueryHandlerTests
         result.Should().BeEmpty();
     }
 }
+

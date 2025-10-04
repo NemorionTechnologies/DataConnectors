@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net9.0</TargetFramework>
@@ -22,7 +22,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\DataWorkflows.Connector.Monday\DataWorkflows.Connector.Monday.csproj" />
+    <ProjectReference Include="..\\..\\src\\DataWorkflows.Connector.Monday\\DataWorkflows.Connector.Monday.csproj" />
   </ItemGroup>
 
   <ItemGroup>

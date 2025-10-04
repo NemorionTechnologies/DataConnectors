@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using DataWorkflows.Connector.Monday.Application.DTOs;
+using DataWorkflows.Connector.Monday.Application.Filters;
 using DataWorkflows.Connector.Monday.Application.Interfaces;
 using FluentAssertions;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -38,7 +39,7 @@ public class BoardsControllerIntegrationTests : IClassFixture<WebApplicationFact
         mockApiClient
             .Setup(x => x.GetBoardItemsAsync(
                 It.IsAny<string>(),
-                It.IsAny<GetItemsFilterModel>(),
+                It.IsAny<MondayFilterDefinition?>(),
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync(expectedItems);
 
@@ -127,7 +128,7 @@ public class BoardsControllerIntegrationTests : IClassFixture<WebApplicationFact
         mockApiClient
             .Setup(x => x.GetBoardItemsAsync(
                 It.IsAny<string>(),
-                It.IsAny<GetItemsFilterModel>(),
+                It.IsAny<MondayFilterDefinition?>(),
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync(new List<MondayItemDto>());
 
@@ -162,7 +163,7 @@ public class BoardsControllerIntegrationTests : IClassFixture<WebApplicationFact
         mockApiClient
             .Setup(x => x.GetBoardItemsAsync(
                 It.IsAny<string>(),
-                It.IsAny<GetItemsFilterModel>(),
+                It.IsAny<MondayFilterDefinition?>(),
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync(new List<MondayItemDto>());
 
@@ -192,3 +193,4 @@ public class BoardsControllerIntegrationTests : IClassFixture<WebApplicationFact
         correlationId.Should().Be(expectedCorrelationId);
     }
 }
+

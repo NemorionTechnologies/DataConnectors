@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 using DataWorkflows.Connector.Monday.Application.DTOs;
+using DataWorkflows.Connector.Monday.Application.Filters;
 using DataWorkflows.Connector.Monday.Application.Interfaces;
 using FluentAssertions;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -99,7 +100,7 @@ public class ItemsControllerIntegrationTests : IClassFixture<WebApplicationFacto
         mockApiClient
             .Setup(x => x.GetSubItemsAsync(
                 It.IsAny<string>(),
-                It.IsAny<GetItemsFilterModel>(),
+                It.IsAny<MondayFilterDefinition?>(),
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync(expectedSubItems);
 
@@ -178,3 +179,4 @@ public class ItemsControllerIntegrationTests : IClassFixture<WebApplicationFacto
         updates![0].ItemId.Should().Be("123");
     }
 }
+

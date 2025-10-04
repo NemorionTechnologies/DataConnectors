@@ -1,0 +1,204 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dataworkflows.dev/schemas/monday-filter.schema.json",
+  "title": "MondayFilterDefinition",
+  "description": "Monday filter configuration supporting rules, grouped conditions, and nested criteria.",
+  "type": "object",
+  "properties": {
+    "groupId": {
+      "type": "string",
+      "description": "Optional Monday group identifier to scope the query."
+    },
+    "rules": {
+      "$ref": "#/definitions/rulesArray"
+    },
+    "createdAt": {
+      "$ref": "#/definitions/dateRange"
+    },
+    "condition": {
+      "$ref": "#/definitions/conditionGroup"
+    },
+    "subItems": {
+      "$ref": "#/definitions/subItemFilter"
+    },
+    "updates": {
+      "$ref": "#/definitions/updateFilter"
+    }
+  },
+  "anyOf": [
+    { "required": ["rules"] },
+    { "required": ["condition"] },
+    { "required": ["createdAt"] },
+    { "required": ["subItems"] },
+    { "required": ["updates"] }
+  ],
+  "additionalProperties": false,
+  "definitions": {
+    "rulesArray": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/rule" },
+      "minItems": 1
+    },
+    "rule": {
+      "type": "object",
+      "properties": {
+        "columnId": {
+          "type": "string",
+          "description": "Monday column identifier (e.g., status column id)."
+        },
+        "operator": {
+          "type": "string",
+          "enum": [
+            "eq",
+            "neq",
+            "contains",
+            "isEmpty",
+            "gt",
+            "gte",
+            "lt",
+            "lte",
+            "before",
+            "after",
+            "between"
+          ],
+          "description": "Comparison operator applied to the column value."
+        },
+        "value": {
+          "description": "Primary comparison value."
+        },
+        "secondValue": {
+          "description": "Secondary comparison value for range operators (between)."
+        },
+        "valueType": {
+          "type": "string",
+          "enum": ["text", "number", "date", "timeline"],
+          "description": "Optional hint to control how values are interpreted."
+        }
+      },
+      "required": ["columnId", "operator"],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": { "properties": { "operator": { "const": "isEmpty" } } },
+          "then": { "not": { "required": ["value"] } }
+        },
+        {
+          "if": { "properties": { "operator": { "const": "between" } } },
+          "then": { "required": ["value", "secondValue"] }
+        }
+      ]
+    },
+    "conditionGroup": {
+      "type": "object",
+      "properties": {
+        "rules": {
+          "$ref": "#/definitions/rulesArray"
+        },
+        "all": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/conditionGroup" }
+        },
+        "any": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/conditionGroup" }
+        },
+        "not": {
+          "$ref": "#/definitions/conditionGroup"
+        }
+      },
+      "additionalProperties": false
+    },
+    "subItemFilter": {
+      "type": "object",
+      "properties": {
+        "mode": {
+          "type": "string",
+          "default": "any",
+          "enum": ["any", "all"],
+          "description": "Whether to require any sub-item match or all sub-items to match."
+        },
+        "definition": {
+          "$ref": "#/"
+        }
+      },
+      "required": ["definition"],
+      "additionalProperties": false
+    },
+    "updateFilter": {
+      "type": "object",
+      "properties": {
+        "mode": {
+          "type": "string",
+          "default": "any",
+          "enum": ["any", "all"]
+        },
+        "rules": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/updateRule" },
+          "minItems": 1
+        }
+      },
+      "required": ["rules"],
+      "additionalProperties": false
+    },
+    "updateRule": {
+      "type": "object",
+      "properties": {
+        "field": {
+          "type": "string",
+          "enum": ["body", "creatorId", "createdAt"],
+          "description": "Update field to compare."
+        },
+        "operator": {
+          "type": "string",
+          "enum": [
+            "eq",
+            "neq",
+            "contains",
+            "gt",
+            "gte",
+            "lt",
+            "lte",
+            "before",
+            "after",
+            "between"
+          ]
+        },
+        "value": {
+          "description": "Primary comparison value."
+        },
+        "secondValue": {
+          "description": "Secondary comparison value for range operators (between)."
+        },
+        "valueType": {
+          "type": "string",
+          "enum": ["text", "number", "date"],
+          "description": "Optional hint for interpreting update values."
+        }
+      },
+      "required": ["field", "operator"],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": { "properties": { "operator": { "const": "between" } } },
+          "then": { "required": ["value", "secondValue"] }
+        }
+      ]
+    },
+    "dateRange": {
+      "type": "object",
+      "properties": {
+        "from": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "to": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["from", "to"],
+      "additionalProperties": false
+    }
+  }
+}

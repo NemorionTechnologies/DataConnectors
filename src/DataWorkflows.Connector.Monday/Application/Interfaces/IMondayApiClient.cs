@@ -1,4 +1,5 @@
 using DataWorkflows.Connector.Monday.Application.DTOs;
+using DataWorkflows.Connector.Monday.Application.Filters;
 
 namespace DataWorkflows.Connector.Monday.Application.Interfaces;
 
@@ -7,7 +8,7 @@ public interface IMondayApiClient
     // Read Operations
     Task<IEnumerable<MondayItemDto>> GetBoardItemsAsync(
         string boardId,
-        GetItemsFilterModel filter,
+        MondayFilterDefinition? filter,
         CancellationToken cancellationToken);
 
     Task<IEnumerable<MondayActivityLogDto>> GetBoardActivityAsync(
@@ -24,7 +25,7 @@ public interface IMondayApiClient
 
     Task<IEnumerable<MondayItemDto>> GetSubItemsAsync(
         string parentItemId,
-        GetItemsFilterModel filter,
+        MondayFilterDefinition? filter,
         CancellationToken cancellationToken);
 
     Task<IEnumerable<MondayUpdateDto>> GetItemUpdatesAsync(
@@ -35,7 +36,7 @@ public interface IMondayApiClient
 
     Task<IEnumerable<MondayHydratedItemDto>> GetHydratedBoardItemsAsync(
         string boardId,
-        GetItemsFilterModel filter,
+        MondayFilterDefinition? filter,
         CancellationToken cancellationToken);
 
     Task<IReadOnlyList<ColumnMetadata>> GetBoardColumnsAsync(

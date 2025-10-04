@@ -1,8 +1,11 @@
+using System.Collections.Generic;
+using System.Linq;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using DataWorkflows.Connector.Monday.Application.DTOs;
+using DataWorkflows.Connector.Monday.Application.Filters;
 using DataWorkflows.Connector.Monday.Application.Interfaces;
 using DataWorkflows.Connector.Monday.Domain.Exceptions;
 
@@ -12,15 +15,18 @@ public class MondayApiClient : IMondayApiClient
 {
     private readonly HttpClient _httpClient;
     private readonly ILogger<MondayApiClient> _logger;
+    private readonly IMondayFilterTranslator _filterTranslator;
     private readonly string _apiKey;
 
     public MondayApiClient(
         HttpClient httpClient,
         IConfiguration configuration,
-        ILogger<MondayApiClient> logger)
+        ILogger<MondayApiClient> logger,
+        IMondayFilterTranslator filterTranslator)
     {
         _httpClient = httpClient;
         _logger = logger;
+        _filterTranslator = filterTranslator;
         _apiKey = configuration["Monday:ApiKey"] ?? throw new InvalidOperationException("Monday API key not configured");
 
         _httpClient.BaseAddress = new Uri("https://api.monday.com/v2/");
@@ -30,10 +36,11 @@ public class MondayApiClient : IMondayApiClient
 
     public async Task<IEnumerable<MondayItemDto>> GetBoardItemsAsync(
         string boardId,
-        GetItemsFilterModel filter,
+        MondayFilterDefinition? filter,
         CancellationToken cancellationToken)
     {
-        var query = BuildGetBoardItemsQuery(boardId, filter);
+        var translation = _filterTranslator.Translate(filter);
+        var query = BuildGetBoardItemsQuery(boardId, filter, translation.QueryParams);
         var response = await ExecuteGraphQLQueryAsync<BoardItemsResponse>(query, cancellationToken);
 
         if (response?.Data?.Boards == null || !response.Data.Boards.Any())
@@ -47,7 +54,42 @@ public class MondayApiClient : IMondayApiClient
             return Enumerable.Empty<MondayItemDto>();
         }
 
-        return itemsPage.Items.Select(MapToMondayItemDto);
+        var items = itemsPage.Items.Select(MapToMondayItemDto).ToList();
+        if (translation.ClientPredicate is not null)
+        {
+            items = items.Where(translation.ClientPredicate).ToList();
+        }
+
+        if (translation.SubItemPredicate is not null)
+        {
+            items = await ApplySubItemFilterAsync(items, translation.SubItemPredicate, cancellationToken);
+        }
+
+        return items;
+    }
+
+    private async Task<List<MondayItemDto>> ApplySubItemFilterAsync(
+        List<MondayItemDto> parentItems,
+        Func<IEnumerable<MondayItemDto>, bool> subItemPredicate,
+        CancellationToken cancellationToken)
+    {
+        if (parentItems.Count == 0)
+        {
+            return parentItems;
+        }
+
+        var evaluations = await Task.WhenAll(parentItems.Select(async item =>
+        {
+            var subItems = await GetSubItemsAsync(item.Id, MondayFilterDefinition.Empty, cancellationToken);
+            var materialized = subItems as IList<MondayItemDto> ?? subItems.ToList();
+            var include = subItemPredicate(materialized);
+            return (Item: item, Include: include);
+        }));
+
+        return evaluations
+            .Where(result => result.Include)
+            .Select(result => result.Item)
+            .ToList();
     }
 
     public async Task<IEnumerable<MondayActivityLogDto>> GetBoardActivityAsync(
@@ -101,7 +143,7 @@ public class MondayApiClient : IMondayApiClient
 
     public async Task<IEnumerable<MondayItemDto>> GetSubItemsAsync(
         string parentItemId,
-        GetItemsFilterModel filter,
+        MondayFilterDefinition? filter,
         CancellationToken cancellationToken)
     {
         var query = BuildGetSubItemsQuery(parentItemId);
@@ -112,10 +154,15 @@ public class MondayApiClient : IMondayApiClient
             throw new ResourceNotFoundException("Item", parentItemId);
         }
 
-        var subItems = response.Data.Items.First().SubItems.Select(MapToMondayItemDto);
+        var translation = _filterTranslator.Translate(filter);
+        var subItems = response.Data.Items.First().SubItems.Select(MapToMondayItemDto).ToList();
 
-        // Apply in-memory filtering since Monday.com API doesn't support server-side filtering of sub-items
-        return ApplyFilterToItems(subItems, filter);
+        if (translation.ClientPredicate is not null)
+        {
+            subItems = subItems.Where(translation.ClientPredicate).ToList();
+        }
+
+        return subItems;
     }
 
     public async Task<IEnumerable<MondayUpdateDto>> GetItemUpdatesAsync(
@@ -142,16 +189,16 @@ public class MondayApiClient : IMondayApiClient
 
     public async Task<IEnumerable<MondayHydratedItemDto>> GetHydratedBoardItemsAsync(
         string boardId,
-        GetItemsFilterModel filter,
+        MondayFilterDefinition? filter,
         CancellationToken cancellationToken)
     {
         // First, get the parent items
-        var parentItems = await GetBoardItemsAsync(boardId, filter, cancellationToken);
+        var parentItems = (await GetBoardItemsAsync(boardId, filter, cancellationToken)).ToList();
 
         // Then, concurrently fetch sub-items and updates for each parent item
         var hydratedItemsTasks = parentItems.Select(async item =>
         {
-            var subItemsTask = GetSubItemsAsync(item.Id, new GetItemsFilterModel(), cancellationToken);
+            var subItemsTask = GetSubItemsAsync(item.Id, MondayFilterDefinition.Empty, cancellationToken);
             var updatesTask = GetItemUpdatesAsync(item.Id, null, null, cancellationToken);
 
             await Task.WhenAll(subItemsTask, updatesTask);
@@ -240,14 +287,31 @@ public class MondayApiClient : IMondayApiClient
         return result;
     }
 
-    private string BuildGetBoardItemsQuery(string boardId, GetItemsFilterModel filter)
+    private string BuildGetBoardItemsQuery(
+        string boardId,
+        MondayFilterDefinition? filter,
+        MondayQueryParams? queryParams)
     {
-        var groupFilter = filter.GroupId != null ? $", groups: [\"{filter.GroupId}\"]" : "";
+        var arguments = new List<string>();
+
+        if (!string.IsNullOrWhiteSpace(filter?.GroupId))
+        {
+            arguments.Add($"groups: [\"{filter!.GroupId}\"]");
+        }
+
+        if (queryParams is not null && queryParams.HasRules)
+        {
+            arguments.Add($"query_params: {BuildQueryParamsFragment(queryParams)}");
+        }
+
+        var itemsPageArguments = arguments.Count > 0
+            ? $"({string.Join(", ", arguments)})"
+            : string.Empty;
 
         return $@"
         {{
             boards(ids: [{boardId}]) {{
-                items_page{groupFilter} {{
+                items_page{itemsPageArguments} {{
                     items {{
                         id
                         name
@@ -452,33 +516,39 @@ public class MondayApiClient : IMondayApiClient
         return DateTimeOffset.TryParse(dateString, out var result) ? result : DateTimeOffset.UtcNow;
     }
 
-    private IEnumerable<MondayItemDto> ApplyFilterToItems(IEnumerable<MondayItemDto> items, GetItemsFilterModel filter)
+    private static string BuildQueryParamsFragment(MondayQueryParams queryParams)
     {
-        var filtered = items.AsEnumerable();
+        var builder = new StringBuilder();
+        builder.Append("{ rules: [");
 
-        if (filter.GroupId != null)
+        for (var index = 0; index < queryParams.Rules.Count; index++)
         {
-            filtered = filtered.Where(i => i.GroupId == filter.GroupId);
-        }
+            var rule = queryParams.Rules[index];
+            builder.Append("{ ");
+            builder.Append($"column_id: \"{EscapeGraphQlString(rule.ColumnId)}\", ");
+            builder.Append($"operator: {rule.Operator}");
 
-        if (filter.TimelineFilter != null)
-        {
-            filtered = filtered.Where(i =>
-                i.CreatedAt >= filter.TimelineFilter.From &&
-                i.CreatedAt <= filter.TimelineFilter.To);
-        }
-
-        if (filter.ColumnFilters != null)
-        {
-            foreach (var columnFilter in filter.ColumnFilters)
+            if (rule.RequiresCompareValue && !string.IsNullOrWhiteSpace(rule.CompareValue))
             {
-                filtered = filtered.Where(i =>
-                    i.ColumnValues.ContainsKey(columnFilter.Key) &&
-                    i.ColumnValues[columnFilter.Key]?.ToString() == columnFilter.Value);
+                builder.Append($", compare_value: \"{EscapeGraphQlString(rule.CompareValue!)}\"");
+            }
+
+            builder.Append(" }");
+            if (index < queryParams.Rules.Count - 1)
+            {
+                builder.Append(", ");
             }
         }
 
-        return filtered;
+        builder.Append("] }");
+        return builder.ToString();
+    }
+
+    private static string EscapeGraphQlString(string value)
+    {
+        return value
+            .Replace("\\", "\\\\")
+            .Replace("\"", "\\\"");
     }
 
     // Response classes for GraphQL deserialization
@@ -653,3 +723,22 @@ public class MondayApiClient : IMondayApiClient
         };
     }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

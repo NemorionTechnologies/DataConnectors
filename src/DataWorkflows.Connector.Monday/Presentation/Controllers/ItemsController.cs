@@ -26,10 +26,11 @@ public class ItemsController : ControllerBase
     [HttpGet("{itemId}/subitems")]
     public async Task<ActionResult<IEnumerable<MondayItemDto>>> GetSubItemsAsync(
         string itemId,
-        [FromQuery] GetItemsFilterModel filter,
+        [FromQuery] GetItemsFilterModel? filter,
         CancellationToken cancellationToken)
     {
-        var query = new GetSubItemsQuery(itemId, filter ?? new GetItemsFilterModel());
+        var filterDefinition = GetItemsFilterModel.ToFilterDefinition(filter);
+        var query = new GetSubItemsQuery(itemId, filterDefinition);
         var result = await _mediator.Send(query, cancellationToken);
         return Ok(result);
     }
@@ -96,3 +97,4 @@ public class ItemsController : ControllerBase
         return Ok(result);
     }
 }
+

@@ -1,4 +1,5 @@
 using DataWorkflows.Connector.Monday.Application.Interfaces;
+using DataWorkflows.Connector.Monday.Application.Filters;
 using DataWorkflows.Connector.Monday.Infrastructure;
 using DataWorkflows.Connector.Monday.Presentation.Middleware;
 using Polly;
@@ -13,6 +14,8 @@ builder.Services.AddSwaggerGen(c =>
 {
     c.SwaggerDoc("v1", new() { Title = "Monday Connector API", Version = "v1" });
 });
+
+builder.Services.AddSingleton<IMondayFilterTranslator, MondayFilterTranslator>();
 
 // Add MediatR
 builder.Services.AddMediatR(cfg => cfg.RegisterServicesFromAssembly(typeof(Program).Assembly));
@@ -64,3 +67,4 @@ app.Run();
 
 // Make the Program class public for integration testing
 public partial class Program { }
+

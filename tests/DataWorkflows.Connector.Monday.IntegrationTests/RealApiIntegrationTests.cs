@@ -2,6 +2,7 @@ using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 using DataWorkflows.Connector.Monday.Application.DTOs;
+using DataWorkflows.Connector.Monday.Application.Filters;
 using DataWorkflows.Connector.Monday.Application.Interfaces;
 using FluentAssertions;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -73,7 +74,7 @@ public class RealApiIntegrationTests : MondayIntegrationTestBase
         _output.WriteLine($"Fetching items from board {Config.BoardId}...");
         var items = (await apiClient.GetBoardItemsAsync(
             Config.BoardId,
-            new GetItemsFilterModel(),
+            MondayFilterDefinition.Empty,
             CancellationToken.None)).ToList();
 
         // Assert
@@ -208,7 +209,7 @@ public class RealApiIntegrationTests : MondayIntegrationTestBase
         _output.WriteLine($"First, fetching items to get a parent item ID...");
         var items = (await apiClient.GetBoardItemsAsync(
             Config.BoardId,
-            new GetItemsFilterModel(),
+            MondayFilterDefinition.Empty,
             CancellationToken.None)).ToList();
 
         if (items == null || !items.Any())
@@ -223,7 +224,7 @@ public class RealApiIntegrationTests : MondayIntegrationTestBase
         // Act
         var subItems = (await apiClient.GetSubItemsAsync(
             parentItemId,
-            new GetItemsFilterModel(),
+            MondayFilterDefinition.Empty,
             CancellationToken.None)).ToList();
 
         // Assert
@@ -268,7 +269,7 @@ public class RealApiIntegrationTests : MondayIntegrationTestBase
         _output.WriteLine($"First, fetching items to get an item ID...");
         var items = (await apiClient.GetBoardItemsAsync(
             Config.BoardId,
-            new GetItemsFilterModel(),
+            MondayFilterDefinition.Empty,
             CancellationToken.None)).ToList();
 
         if (items == null || !items.Any())
@@ -330,7 +331,7 @@ public class RealApiIntegrationTests : MondayIntegrationTestBase
         _output.WriteLine($"Fetching hydrated items from board {Config.BoardId}...");
         var hydratedItems = (await apiClient.GetHydratedBoardItemsAsync(
             Config.BoardId,
-            new GetItemsFilterModel(),
+            MondayFilterDefinition.Empty,
             CancellationToken.None)).ToList();
 
         // Assert
@@ -374,7 +375,7 @@ public class RealApiIntegrationTests : MondayIntegrationTestBase
         _output.WriteLine($"Fetching items to get item ID and column info...");
         var items = (await apiClient.GetBoardItemsAsync(
             Config.BoardId,
-            new GetItemsFilterModel(),
+            MondayFilterDefinition.Empty,
             CancellationToken.None)).ToList();
 
         if (items == null || !items.Any())
@@ -453,7 +454,7 @@ public class RealApiIntegrationTests : MondayIntegrationTestBase
         _output.WriteLine($"Fetching items to get item ID...");
         var items = (await apiClient.GetBoardItemsAsync(
             Config.BoardId,
-            new GetItemsFilterModel(),
+            MondayFilterDefinition.Empty,
             CancellationToken.None)).ToList();
 
         if (items == null || !items.Any())
@@ -532,7 +533,7 @@ public class RealApiIntegrationTests : MondayIntegrationTestBase
         _output.WriteLine($"Fetching items to get item ID...");
         var items = (await apiClient.GetBoardItemsAsync(
             Config.BoardId,
-            new GetItemsFilterModel(),
+            MondayFilterDefinition.Empty,
             CancellationToken.None)).ToList();
 
         if (items == null || !items.Any())
@@ -617,7 +618,7 @@ public class RealApiIntegrationTests : MondayIntegrationTestBase
         _output.WriteLine($"Fetching all items from board {Config.BoardId}...");
         var items = (await apiClient.GetBoardItemsAsync(
             Config.BoardId,
-            new GetItemsFilterModel(),
+            MondayFilterDefinition.Empty,
             CancellationToken.None)).ToList();
 
         // Assert
@@ -733,7 +734,7 @@ public class RealApiIntegrationTests : MondayIntegrationTestBase
         // Get hydrated items using API client
         var hydratedItems = (await apiClient.GetHydratedBoardItemsAsync(
             Config.BoardId,
-            new GetItemsFilterModel(),
+            MondayFilterDefinition.Empty,
             CancellationToken.None)).ToList();
 
         hydratedItems.Should().NotBeNull();
@@ -808,3 +809,4 @@ public class RealApiIntegrationTests : MondayIntegrationTestBase
         _output.WriteLine($"Correlation ID round-trip successful: {correlationId}");
     }
 }
+
