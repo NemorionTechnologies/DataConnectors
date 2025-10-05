@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Net.Http.Headers;
 using System.Text;
@@ -369,48 +370,184 @@ public class MondayApiClient : IMondayApiClient
     }
 
     private async Task<T?> ExecuteGraphQLQueryAsync<T>(string query, CancellationToken cancellationToken)
+
     {
+
         var request = new { query };
+
         var json = JsonSerializer.Serialize(request);
+
         var content = new StringContent(json, Encoding.UTF8, "application/json");
+
+
 
         _logger.LogDebug("Executing GraphQL query: {Query}", query);
 
+
+
         var httpResponse = await _httpClient.PostAsync("", content, cancellationToken);
+
         var responseBody = await httpResponse.Content.ReadAsStringAsync(cancellationToken);
+
+
 
         _logger.LogDebug("GraphQL response: {Response}", responseBody);
 
+
+
         if (!httpResponse.IsSuccessStatusCode)
+
         {
+
             _logger.LogError("GraphQL query failed with status {StatusCode}: {Response}",
+
                 httpResponse.StatusCode, responseBody);
+
             httpResponse.EnsureSuccessStatusCode();
+
         }
 
-        var result = JsonSerializer.Deserialize<T>(responseBody, new JsonSerializerOptions
-        {
-            PropertyNameCaseInsensitive = true
-        });
 
-        // Check for GraphQL errors
-        var errorCheck = JsonSerializer.Deserialize<GraphQLErrorResponse>(responseBody, new JsonSerializerOptions
-        {
-            PropertyNameCaseInsensitive = true
-        });
 
-        if (errorCheck?.Errors != null && errorCheck.Errors.Any())
+        using (var document = JsonDocument.Parse(responseBody))
+
         {
-            var firstError = errorCheck.Errors.First();
-            if (firstError.Message.Contains("not found", StringComparison.OrdinalIgnoreCase))
+
+            LogGraphQlComplexity(document);
+
+
+
+            if (document.RootElement.TryGetProperty("errors", out var errorsElement) &&
+
+                errorsElement.ValueKind == JsonValueKind.Array &&
+
+                errorsElement.GetArrayLength() > 0)
+
             {
-                throw new ResourceNotFoundException(firstError.Message);
+
+                var firstError = errorsElement[0];
+
+                var message = firstError.TryGetProperty("message", out var messageElement)
+
+                    ? messageElement.GetString() ?? "GraphQL error"
+
+                    : "GraphQL error";
+
+
+
+                if (message.Contains("not found", StringComparison.OrdinalIgnoreCase))
+
+                {
+
+                    throw new ResourceNotFoundException(message);
+
+                }
+
+
+
+                throw new InvalidOperationException($"GraphQL error: {message}");
+
             }
-            throw new InvalidOperationException($"GraphQL error: {firstError.Message}");
+
         }
 
-        return result;
+
+
+        return JsonSerializer.Deserialize<T>(responseBody, new JsonSerializerOptions
+
+        {
+
+            PropertyNameCaseInsensitive = true
+
+        });
+
     }
+
+
+
+    private void LogGraphQlComplexity(JsonDocument document)
+
+    {
+
+        if (!document.RootElement.TryGetProperty("extensions", out var extensions) || extensions.ValueKind != JsonValueKind.Object)
+
+        {
+
+            return;
+
+        }
+
+
+
+        if (!extensions.TryGetProperty("complexity", out var complexity) || complexity.ValueKind != JsonValueKind.Object)
+
+        {
+
+            return;
+
+        }
+
+
+
+        var total = TryGetDouble(complexity, "total");
+
+        var remaining = TryGetDouble(complexity, "remaining");
+
+        var queryCost = TryGetDouble(complexity, "query");
+
+        var after = TryGetDouble(complexity, "after");
+
+
+
+        if (total.HasValue || remaining.HasValue || queryCost.HasValue || after.HasValue)
+
+        {
+
+            _logger.LogDebug("GraphQL complexity: total={Total}, remaining={Remaining}, query={QueryCost}, after={After}", total, remaining, queryCost, after);
+
+        }
+
+        else
+
+        {
+
+            _logger.LogDebug("GraphQL complexity payload: {Payload}", complexity.GetRawText());
+
+        }
+
+    }
+
+
+
+    private static double? TryGetDouble(JsonElement element, string propertyName)
+
+    {
+
+        if (!element.TryGetProperty(propertyName, out var property))
+
+        {
+
+            return null;
+
+        }
+
+
+
+        return property.ValueKind switch
+
+        {
+
+            JsonValueKind.Number => property.GetDouble(),
+
+            JsonValueKind.String when double.TryParse(property.GetString(), NumberStyles.Float, CultureInfo.InvariantCulture, out var value) => value,
+
+            _ => null
+
+        };
+
+    }
+
+
 
     private string BuildGetBoardItemsQuery(
         string boardId,
@@ -680,115 +817,6 @@ public class MondayApiClient : IMondayApiClient
     }
 
     // Response classes for GraphQL deserialization
-    private class GraphQLErrorResponse
-    {
-        public List<GraphQLError>? Errors { get; set; }
-    }
-
-    private class GraphQLError
-    {
-        public string Message { get; set; } = "";
-    }
-
-    private class BoardItemsResponse
-    {
-        public BoardItemsData? Data { get; set; }
-    }
-
-    private class BoardItemsData
-    {
-        public List<BoardWithItems> Boards { get; set; } = new();
-    }
-
-    private class BoardWithItems
-    {
-        [JsonPropertyName("items_page")]
-        public ItemsPage? ItemsPage { get; set; }
-    }
-
-    private class ItemsPage
-    {
-        public List<dynamic> Items { get; set; } = new();
-    }
-
-    private class BoardActivityResponse
-    {
-        public BoardActivityData? Data { get; set; }
-    }
-
-    private class BoardActivityData
-    {
-        public List<BoardWithActivity> Boards { get; set; } = new();
-    }
-
-    private class BoardWithActivity
-    {
-        public List<dynamic> ActivityLogs { get; set; } = new();
-    }
-
-    private class BoardUpdatesResponse
-    {
-        public BoardUpdatesData? Data { get; set; }
-    }
-
-    private class BoardUpdatesData
-    {
-        public List<BoardWithItemUpdates> Boards { get; set; } = new();
-    }
-
-    private class BoardWithItemUpdates
-    {
-        [JsonPropertyName("items_page")]
-        public ItemsPageWithUpdates? ItemsPage { get; set; }
-    }
-
-    private class ItemsPageWithUpdates
-    {
-        public List<ItemWithUpdates> Items { get; set; } = new();
-    }
-
-    private class ItemWithUpdates
-    {
-        public string Id { get; set; } = "";
-        public List<dynamic> Updates { get; set; } = new();
-    }
-
-    private class ItemSubItemsResponse
-    {
-        public ItemSubItemsData? Data { get; set; }
-    }
-
-    private class ItemSubItemsData
-    {
-        public List<ItemWithSubItems> Items { get; set; } = new();
-    }
-
-    private class ItemWithSubItems
-    {
-        public List<dynamic> SubItems { get; set; } = new();
-    }
-
-    private class ItemUpdatesResponse
-    {
-        public ItemUpdatesData? Data { get; set; }
-    }
-
-    private class ItemUpdatesData
-    {
-        public List<ItemWithUpdates> Items { get; set; } = new();
-    }
-
-    private class UpdateColumnValueResponse
-    {
-        public UpdateColumnValueData? Data { get; set; }
-    }
-
-    private class UpdateColumnValueData
-    {
-        [JsonPropertyName("change_column_value")]
-        public dynamic? ChangeColumnValue { get; set; }
-    }
-
     private class BoardColumnsResponse
     {
         public BoardColumnsData? Data { get; set; }
@@ -825,6 +853,106 @@ public class MondayApiClient : IMondayApiClient
         return columns.Select(MapToColumnMetadata).ToList();
     }
 
+    private class BoardItemsResponse
+    {
+        public BoardItemsData? Data { get; set; }
+    }
+
+    private class BoardItemsData
+    {
+        public List<BoardWithItems> Boards { get; set; } = new();
+    }
+
+    private class BoardWithItems
+    {
+        [JsonPropertyName("items_page")]
+        public ItemsPageWithItems? ItemsPage { get; set; }
+    }
+
+    private class ItemsPageWithItems
+    {
+        public List<dynamic> Items { get; set; } = new();
+    }
+
+    private class BoardActivityResponse
+    {
+        public BoardActivityData? Data { get; set; }
+    }
+
+    private class BoardActivityData
+    {
+        public List<BoardWithActivityLogs> Boards { get; set; } = new();
+    }
+
+    private class BoardWithActivityLogs
+    {
+        [JsonPropertyName("activity_logs")]
+        public List<dynamic> ActivityLogs { get; set; } = new();
+    }
+
+    private class ItemsPageWithUpdates
+    {
+        public List<ItemWithUpdates> Items { get; set; } = new();
+    }
+
+    private class BoardUpdatesResponse
+    {
+        public BoardUpdatesData? Data { get; set; }
+    }
+
+    private class BoardUpdatesData
+    {
+        public List<BoardWithUpdates> Boards { get; set; } = new();
+    }
+
+    private class BoardWithUpdates
+    {
+        [JsonPropertyName("items_page")]
+        public ItemsPageWithUpdates? ItemsPage { get; set; }
+    }
+
+    private class ItemWithUpdates
+    {
+        public string Id { get; set; } = string.Empty;
+        public List<dynamic> Updates { get; set; } = new();
+    }
+
+    private class ItemSubItemsResponse
+    {
+        public ItemSubItemsData? Data { get; set; }
+    }
+
+    private class ItemSubItemsData
+    {
+        public List<ItemWithSubItems> Items { get; set; } = new();
+    }
+
+    private class ItemWithSubItems
+    {
+        public List<dynamic> SubItems { get; set; } = new();
+    }
+
+    private class ItemUpdatesResponse
+    {
+        public ItemUpdatesData? Data { get; set; }
+    }
+
+    private class ItemUpdatesData
+    {
+        public List<ItemWithUpdates> Items { get; set; } = new();
+    }
+
+    private class UpdateColumnValueResponse
+    {
+        public UpdateColumnValueData? Data { get; set; }
+    }
+
+    private class UpdateColumnValueData
+    {
+        [JsonPropertyName("change_column_value")]
+        public dynamic? ChangeColumnValue { get; set; }
+    }
+
     private string BuildGetBoardColumnsQuery(string boardId)
     {
         return $@"
@@ -912,6 +1040,8 @@ public class MondayApiClient : IMondayApiClient
     }
 
 }
+
+
 
 
 

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using DataWorkflows.Connector.Monday.Application.DTOs;
 
@@ -12,7 +12,8 @@ public sealed record MondayFilterTranslationResult(
     Func<MondayItemDto, bool>? ClientPredicate,
     MondaySubItemFilterTranslation? SubItemTranslation,
     Func<IEnumerable<MondayUpdateDto>, bool>? UpdatePredicate,
-    Func<IEnumerable<MondayActivityLogDto>, bool>? ActivityLogPredicate);
+    Func<IEnumerable<MondayActivityLogDto>, bool>? ActivityLogPredicate,
+    MondayFilterComplexityMetrics ComplexityMetrics);
 
 public sealed record MondaySubItemFilterTranslation(
     Func<MondayItemDto, bool>? ItemPredicate,
@@ -36,4 +37,5 @@ public sealed record MondayQueryRule(
     string Operator,
     string? CompareValue,
     bool RequiresCompareValue);
+
 

@@ -12,31 +12,57 @@ namespace DataWorkflows.Connector.Monday.Application.Filters;
 public class MondayFilterTranslator : IMondayFilterTranslator
 {
     private readonly ILogger<MondayFilterTranslator> _logger;
+    private readonly IMondayFilterGuardrailValidator _guardrailValidator;
 
-    public MondayFilterTranslator(ILogger<MondayFilterTranslator> logger)
+    public MondayFilterTranslator(
+        ILogger<MondayFilterTranslator> logger,
+        IMondayFilterGuardrailValidator guardrailValidator)
     {
         _logger = logger;
+        _guardrailValidator = guardrailValidator;
     }
 
     public MondayFilterTranslationResult Translate(MondayFilterDefinition? filterDefinition)
     {
         if (filterDefinition is null || filterDefinition.IsEmpty)
         {
-            return new MondayFilterTranslationResult(null, null, null, null, null);
+            return new MondayFilterTranslationResult(null, null, null, null, null, new MondayFilterComplexityMetrics(0, 0, 0, 0, 0, false));
+        }
+
+        // Validate against guardrails first (Single Responsibility: validation delegated to validator)
+        var validationResult = _guardrailValidator.Validate(filterDefinition);
+        if (!validationResult.IsValid)
+        {
+            throw new Domain.Exceptions.GuardrailViolationException(validationResult.ErrorMessage ?? "Unknown guardrail violation");
+        }
+
+        if (validationResult.WarningMessage is not null)
+        {
+            _logger.LogWarning("Filter complexity warning: {Warning}", validationResult.WarningMessage);
         }
 
         var rootCondition = BuildRootCondition(filterDefinition);
+        var queryParams = BuildQueryParams(rootCondition);
         var predicate = BuildPredicate(rootCondition, filterDefinition.CreatedAt);
         var subItemTranslation = BuildSubItemTranslation(filterDefinition.SubItems);
         var updatePredicate = BuildUpdatePredicate(filterDefinition.Updates);
         var activityPredicate = BuildActivityLogPredicate(filterDefinition.ActivityLogs);
+        var metrics = MondayFilterComplexityAnalyzer.Analyze(filterDefinition);
 
-        if (predicate is null && subItemTranslation is null && updatePredicate is null && activityPredicate is null)
+        if (queryParams is not null)
+        {
+            _logger.LogDebug("Filter will use server-side translation: {RuleCount} rules", queryParams.Rules.Count);
+        }
+        else if (predicate is not null || subItemTranslation is not null || updatePredicate is not null || activityPredicate is not null)
+        {
+            _logger.LogDebug("Filter will use client-side evaluation. Complexity: {Metrics}", metrics);
+        }
+        else
         {
             _logger.LogDebug("Filter definition produced no executable predicate.");
         }
 
-        return new MondayFilterTranslationResult(null, predicate, subItemTranslation, updatePredicate, activityPredicate);
+        return new MondayFilterTranslationResult(queryParams, predicate, subItemTranslation, updatePredicate, activityPredicate, metrics);
     }
 
     private static MondayFilterConditionGroup? BuildRootCondition(MondayFilterDefinition definition)
@@ -60,6 +86,129 @@ public class MondayFilterTranslator : IMondayFilterTranslator
             All: new[] { condition },
             Any: null,
             Not: null);
+    }
+
+    /// <summary>
+    /// Builds server-side query parameters for Monday GraphQL if the filter is compatible.
+    /// Only simple AND-only chains without OR/NOT are translated server-side.
+    /// </summary>
+    private static MondayQueryParams? BuildQueryParams(MondayFilterConditionGroup? condition)
+    {
+        if (condition is null || !condition.HasContent)
+        {
+            return null;
+        }
+
+        // Server-side translation only supports flat AND chains (no OR/NOT/nested groups)
+        if (!IsSimpleAndChain(condition))
+        {
+            return null;
+        }
+
+        var rules = CollectAllRules(condition);
+        if (rules.Count == 0)
+        {
+            return null;
+        }
+
+        var queryRules = new List<MondayQueryRule>();
+        foreach (var rule in rules)
+        {
+            var queryRule = TranslateRuleToServerSide(rule);
+            if (queryRule is null)
+            {
+                // If any rule cannot be translated server-side, fall back to client-side evaluation
+                return null;
+            }
+
+            queryRules.Add(queryRule);
+        }
+
+        return new MondayQueryParams(queryRules);
+    }
+
+    /// <summary>
+    /// Checks if the condition group is a simple AND-only chain (no OR/NOT/nesting beyond single level).
+    /// </summary>
+    private static bool IsSimpleAndChain(MondayFilterConditionGroup condition)
+    {
+        // No OR or NOT allowed for server-side translation
+        if (condition.Any is { Count: > 0 } || condition.Not is not null)
+        {
+            return false;
+        }
+
+        // If there are nested ALL groups, check they're also simple
+        if (condition.All is { Count: > 0 })
+        {
+            foreach (var child in condition.All)
+            {
+                if (!IsSimpleAndChain(child))
+                {
+                    return false;
+                }
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Collects all rules from a simple AND-only chain into a flat list.
+    /// </summary>
+    private static List<MondayFilterRule> CollectAllRules(MondayFilterConditionGroup condition)
+    {
+        var rules = new List<MondayFilterRule>();
+
+        if (condition.Rules is { Count: > 0 })
+        {
+            rules.AddRange(condition.Rules);
+        }
+
+        if (condition.All is { Count: > 0 })
+        {
+            foreach (var child in condition.All)
+            {
+                rules.AddRange(CollectAllRules(child));
+            }
+        }
+
+        return rules;
+    }
+
+    /// <summary>
+    /// Translates a single filter rule to Monday GraphQL query rule format.
+    /// Returns null if the rule cannot be translated server-side.
+    /// </summary>
+    private static MondayQueryRule? TranslateRuleToServerSide(MondayFilterRule rule)
+    {
+        var mondayOperator = rule.Operator switch
+        {
+            MondayFilterOperators.EqualsOperator => "any_of",
+            MondayFilterOperators.NotEqualsOperator => "not_any_of",
+            MondayFilterOperators.ContainsOperator => "contains_text",
+            MondayFilterOperators.IsEmptyOperator => "is_empty",
+            _ => null // Unsupported operators fall back to client-side
+        };
+
+        if (mondayOperator is null)
+        {
+            return null;
+        }
+
+        var requiresValue = !string.Equals(mondayOperator, "is_empty", StringComparison.OrdinalIgnoreCase);
+
+        // Validate that rules requiring a value actually have one
+        if (requiresValue && string.IsNullOrWhiteSpace(rule.Value))
+        {
+            return null;
+        }
+
+        return new MondayQueryRule(
+            ColumnId: rule.ColumnId,
+            Operator: mondayOperator,
+            CompareValue: rule.Value,
+            RequiresCompareValue: requiresValue);
     }
 
     private static Func<MondayItemDto, bool>? BuildPredicate(
@@ -767,6 +916,9 @@ public static class MondayFilterOperators
     public const string AfterOperator = "after";
     public const string BetweenOperator = "between";
 }
+
+
+
 
 
 

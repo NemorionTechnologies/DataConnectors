@@ -15,6 +15,12 @@ builder.Services.AddSwaggerGen(c =>
     c.SwaggerDoc("v1", new() { Title = "Monday Connector API", Version = "v1" });
 });
 
+// Configure guardrails
+builder.Services.Configure<GuardrailOptions>(
+    builder.Configuration.GetSection(GuardrailOptions.SectionName));
+
+// Add filter services (Dependency Inversion Principle: depend on abstractions)
+builder.Services.AddSingleton<IMondayFilterGuardrailValidator, MondayFilterGuardrailValidator>();
 builder.Services.AddSingleton<IMondayFilterTranslator, MondayFilterTranslator>();
 
 // Add MediatR

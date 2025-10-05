@@ -1,5 +1,6 @@
 ﻿using DataWorkflows.Connector.Monday.Application.DTOs;
 using DataWorkflows.Connector.Monday.Application.Filters;
+using DataWorkflows.Connector.Monday.Application.Interfaces;
 using FluentAssertions;
 using System.Globalization;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -9,7 +10,27 @@ namespace DataWorkflows.Connector.Monday.Tests.Filters;
 
 public class MondayFilterTranslatorTests
 {
-    private readonly MondayFilterTranslator _translator = new(NullLogger<MondayFilterTranslator>.Instance);
+    private readonly MondayFilterTranslator _translator;
+
+    public MondayFilterTranslatorTests()
+    {
+        var guardrailValidator = CreateMockGuardrailValidator();
+        _translator = new MondayFilterTranslator(NullLogger<MondayFilterTranslator>.Instance, guardrailValidator);
+    }
+
+    private static IMondayFilterGuardrailValidator CreateMockGuardrailValidator()
+    {
+        // Mock validator that always passes for unit tests
+        return new PassthroughGuardrailValidator();
+    }
+
+    private class PassthroughGuardrailValidator : IMondayFilterGuardrailValidator
+    {
+        public GuardrailValidationResult Validate(MondayFilterDefinition? filterDefinition)
+        {
+            return GuardrailValidationResult.Ok();
+        }
+    }
 
     [Fact]
     public void Translate_ShouldReturnNulls_WhenFilterIsNull()
@@ -20,6 +41,8 @@ public class MondayFilterTranslatorTests
         result.ClientPredicate.Should().BeNull();
         result.SubItemTranslation.Should().BeNull();
         result.UpdatePredicate.Should().BeNull();
+        result.ActivityLogPredicate.Should().BeNull();
+        result.ComplexityMetrics.TotalRuleCount.Should().Be(0);
         result.ActivityLogPredicate.Should().BeNull();
     }
 
@@ -34,7 +57,8 @@ public class MondayFilterTranslatorTests
 
         var result = _translator.Translate(filter);
 
-        result.QueryParams.Should().BeNull();
+        // Now produces server-side query params for simple AND chains
+        result.QueryParams.Should().NotBeNull();
         result.ClientPredicate.Should().NotBeNull();
 
         var matchingItem = CreateItem("status", text: "Done");
@@ -69,7 +93,8 @@ public class MondayFilterTranslatorTests
             Condition: null);
 
         var result = _translator.Translate(filter);
-        result.QueryParams.Should().BeNull();
+        // isEmpty is server-side translatable
+        result.QueryParams.Should().NotBeNull();
         result.ClientPredicate.Should().NotBeNull();
 
         var itemWithoutColumn = CreateItem("status", text: "Something");
@@ -131,7 +156,8 @@ public class MondayFilterTranslatorTests
 
         var result = _translator.Translate(filter);
 
-        result.QueryParams.Should().BeNull();
+        // Nested ALL groups with supported operators now translate server-side
+        result.QueryParams.Should().NotBeNull();
         result.ClientPredicate.Should().NotBeNull();
 
         var matchingItem = CreateItem();
@@ -563,6 +589,14 @@ public class MondayFilterTranslatorTests
         var subLogs = new[] { CreateActivityLog(eventType: "status_changed") };
         subTranslation.ActivityLogPredicate!(subLogs).Should().BeTrue();
         subTranslation.ActivityLogPredicate!(new[] { CreateActivityLog(eventType: "comment_added") }).Should().BeFalse();
+
+        result.ComplexityMetrics.ItemRuleCount.Should().Be(1);
+        result.ComplexityMetrics.SubItemRuleCount.Should().Be(5);
+        result.ComplexityMetrics.UpdateRuleCount.Should().Be(1);
+        result.ComplexityMetrics.ActivityRuleCount.Should().Be(1);
+        result.ComplexityMetrics.TotalRuleCount.Should().Be(8);
+        result.ComplexityMetrics.MaxDepth.Should().BeGreaterThanOrEqualTo(2);
+        result.ComplexityMetrics.HasCompositeRules.Should().BeTrue();
     }
 
     [Fact]
@@ -754,7 +788,248 @@ public class MondayFilterTranslatorTests
             }
         };
     }
+
+    #region Server-Side Translation Tests
+
+    [Fact]
+    public void Translate_ShouldProduceQueryParams_ForSimpleEqualsRule()
+    {
+        var filter = new MondayFilterDefinition(
+            GroupId: null,
+            Rules: new[] { new MondayFilterRule("status", MondayFilterOperators.EqualsOperator, "Done") },
+            CreatedAt: null,
+            Condition: null);
+
+        var result = _translator.Translate(filter);
+
+        result.QueryParams.Should().NotBeNull();
+        result.QueryParams!.HasRules.Should().BeTrue();
+        result.QueryParams.Rules.Should().HaveCount(1);
+        result.QueryParams.Rules[0].ColumnId.Should().Be("status");
+        result.QueryParams.Rules[0].Operator.Should().Be("any_of");
+        result.QueryParams.Rules[0].CompareValue.Should().Be("Done");
+        result.QueryParams.Rules[0].RequiresCompareValue.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Translate_ShouldProduceQueryParams_ForMultipleAndRules()
+    {
+        var filter = new MondayFilterDefinition(
+            GroupId: null,
+            Rules: new[]
+            {
+                new MondayFilterRule("status", MondayFilterOperators.EqualsOperator, "Done"),
+                new MondayFilterRule("priority", MondayFilterOperators.EqualsOperator, "High")
+            },
+            CreatedAt: null,
+            Condition: null);
+
+        var result = _translator.Translate(filter);
+
+        result.QueryParams.Should().NotBeNull();
+        result.QueryParams!.Rules.Should().HaveCount(2);
+        result.QueryParams.Rules[0].ColumnId.Should().Be("status");
+        result.QueryParams.Rules[1].ColumnId.Should().Be("priority");
+    }
+
+    [Fact]
+    public void Translate_ShouldProduceQueryParams_ForNestedAllGroups()
+    {
+        var condition = new MondayFilterConditionGroup(
+            Rules: new[] { new MondayFilterRule("status", MondayFilterOperators.EqualsOperator, "Done") },
+            All: new[]
+            {
+                new MondayFilterConditionGroup(
+                    Rules: new[] { new MondayFilterRule("priority", MondayFilterOperators.EqualsOperator, "High") },
+                    All: null,
+                    Any: null,
+                    Not: null)
+            },
+            Any: null,
+            Not: null);
+
+        var filter = new MondayFilterDefinition(
+            GroupId: null,
+            Rules: Array.Empty<MondayFilterRule>(),
+            CreatedAt: null,
+            Condition: condition);
+
+        var result = _translator.Translate(filter);
+
+        result.QueryParams.Should().NotBeNull();
+        result.QueryParams!.Rules.Should().HaveCount(2);
+        result.QueryParams.Rules.Should().Contain(r => r.ColumnId == "status");
+        result.QueryParams.Rules.Should().Contain(r => r.ColumnId == "priority");
+    }
+
+    [Fact]
+    public void Translate_ShouldNotProduceQueryParams_ForOrGroup()
+    {
+        var condition = new MondayFilterConditionGroup(
+            Rules: null,
+            All: null,
+            Any: new[]
+            {
+                new MondayFilterConditionGroup(
+                    Rules: new[] { new MondayFilterRule("status", MondayFilterOperators.EqualsOperator, "Done") },
+                    All: null,
+                    Any: null,
+                    Not: null)
+            },
+            Not: null);
+
+        var filter = new MondayFilterDefinition(
+            GroupId: null,
+            Rules: Array.Empty<MondayFilterRule>(),
+            CreatedAt: null,
+            Condition: condition);
+
+        var result = _translator.Translate(filter);
+
+        result.QueryParams.Should().BeNull();
+        result.ClientPredicate.Should().NotBeNull();
+    }
+
+    [Fact]
+    public void Translate_ShouldNotProduceQueryParams_ForNotGroup()
+    {
+        var condition = new MondayFilterConditionGroup(
+            Rules: null,
+            All: null,
+            Any: null,
+            Not: new MondayFilterConditionGroup(
+                Rules: new[] { new MondayFilterRule("status", MondayFilterOperators.EqualsOperator, "Done") },
+                All: null,
+                Any: null,
+                Not: null));
+
+        var filter = new MondayFilterDefinition(
+            GroupId: null,
+            Rules: Array.Empty<MondayFilterRule>(),
+            CreatedAt: null,
+            Condition: condition);
+
+        var result = _translator.Translate(filter);
+
+        result.QueryParams.Should().BeNull();
+        result.ClientPredicate.Should().NotBeNull();
+    }
+
+    [Fact]
+    public void Translate_ShouldProduceQueryParams_ForSupportedOperators()
+    {
+        var supportedOperators = new[]
+        {
+            (MondayFilterOperators.EqualsOperator, "any_of"),
+            (MondayFilterOperators.NotEqualsOperator, "not_any_of"),
+            (MondayFilterOperators.ContainsOperator, "contains_text"),
+            (MondayFilterOperators.IsEmptyOperator, "is_empty")
+        };
+
+        foreach (var (filterOp, mondayOp) in supportedOperators)
+        {
+            var filter = new MondayFilterDefinition(
+                GroupId: null,
+                Rules: new[] { new MondayFilterRule("status", filterOp, "Done") },
+                CreatedAt: null,
+                Condition: null);
+
+            var result = _translator.Translate(filter);
+
+            result.QueryParams.Should().NotBeNull($"operator {filterOp} should be server-side translatable");
+            result.QueryParams!.Rules[0].Operator.Should().Be(mondayOp);
+        }
+    }
+
+    [Fact]
+    public void Translate_ShouldNotProduceQueryParams_ForUnsupportedOperators()
+    {
+        var unsupportedOperators = new[]
+        {
+            MondayFilterOperators.BeforeOperator,
+            MondayFilterOperators.AfterOperator,
+            MondayFilterOperators.BetweenOperator,
+            MondayFilterOperators.GreaterThanOperator,
+            MondayFilterOperators.LessThanOperator
+        };
+
+        foreach (var op in unsupportedOperators)
+        {
+            var filter = new MondayFilterDefinition(
+                GroupId: null,
+                Rules: new[] { new MondayFilterRule("date", op, "2025-01-01") },
+                CreatedAt: null,
+                Condition: null);
+
+            var result = _translator.Translate(filter);
+
+            result.QueryParams.Should().BeNull($"operator {op} should fall back to client-side");
+            result.ClientPredicate.Should().NotBeNull();
+        }
+    }
+
+    [Fact]
+    public void Translate_ShouldProduceQueryParams_ForIsEmptyWithoutValue()
+    {
+        var filter = new MondayFilterDefinition(
+            GroupId: null,
+            Rules: new[] { new MondayFilterRule("link", MondayFilterOperators.IsEmptyOperator, Value: null) },
+            CreatedAt: null,
+            Condition: null);
+
+        var result = _translator.Translate(filter);
+
+        result.QueryParams.Should().NotBeNull();
+        result.QueryParams!.Rules[0].Operator.Should().Be("is_empty");
+        result.QueryParams!.Rules[0].RequiresCompareValue.Should().BeFalse();
+    }
+
+    [Fact]
+    public void Translate_ShouldNotProduceQueryParams_WhenRuleLacksRequiredValue()
+    {
+        var filter = new MondayFilterDefinition(
+            GroupId: null,
+            Rules: new[] { new MondayFilterRule("status", MondayFilterOperators.EqualsOperator, Value: null) },
+            CreatedAt: null,
+            Condition: null);
+
+        var result = _translator.Translate(filter);
+
+        result.QueryParams.Should().BeNull();
+        result.ClientPredicate.Should().NotBeNull();
+    }
+
+    [Fact]
+    public void Translate_ShouldThrowGuardrailException_WhenValidationFails()
+    {
+        var failingValidator = new FailingGuardrailValidator();
+        var translator = new MondayFilterTranslator(NullLogger<MondayFilterTranslator>.Instance, failingValidator);
+
+        var filter = new MondayFilterDefinition(
+            GroupId: null,
+            Rules: new[] { new MondayFilterRule("status", "eq", "Done") },
+            CreatedAt: null,
+            Condition: null);
+
+        var act = () => translator.Translate(filter);
+
+        act.Should().Throw<Domain.Exceptions.GuardrailViolationException>();
+    }
+
+    private class FailingGuardrailValidator : IMondayFilterGuardrailValidator
+    {
+        public GuardrailValidationResult Validate(MondayFilterDefinition? filterDefinition)
+        {
+            return GuardrailValidationResult.Error("Test failure");
+        }
+    }
+
+    #endregion
 }
+
+
+
+
 
 
 

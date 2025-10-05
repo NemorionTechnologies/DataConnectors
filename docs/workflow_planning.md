@@ -338,10 +338,60 @@ public sealed record WorkflowEvent(
 - Step 4 completed (2025-10-14): sub-item filters wired through `MondaySubItemFilter`, translator now emits nested predicates, `MondayApiClient` materializes sub-items to apply aggregation, and unit/integration coverage exercises representative boards.
 - Step 5 completed (2025-10-15): update and activity-log filters now compile into predicates, `MondayApiClient` evaluates them alongside sub-item logic, and unit/integration coverage targets representative boards.
 
+## Implementation Status (2025-10-05)
+
+### Completed: Server-Side Translation & Guardrails
+
+**Server-side translation strategy implemented:**
+- Simple AND-only filter chains now translate to Monday GraphQL `query_params`
+- Supported operators for server-side: `eq` (any_of), `neq` (not_any_of), `contains` (contains_text), `isEmpty` (is_empty)
+- Filters with OR/NOT groups or unsupported operators (date ranges, numeric comparisons) fall back to client-side evaluation
+- Nested ALL groups fully supported for server-side translation
+- Verified working against live Monday API
+
+**Guardrails system operational:**
+- `IMondayFilterGuardrailValidator` validates filter complexity before translation
+- Configurable limits via `appsettings.json`:
+  - `MaxDepth`: maximum nesting level (default: 3)
+  - `MaxTotalRuleCount`: maximum rules across all dimensions (default: 50)
+  - `ComplexityWarningThreshold`: soft limit for warnings (default: 30)
+- `GuardrailViolationException` thrown when hard limits exceeded (returns HTTP 400)
+- Warnings logged when complexity threshold breached but not blocking
+- Guardrails can be disabled via configuration for advanced use cases
+- Exception handling verified against live Monday API
+
+**Testing coverage:**
+- **Unit tests (41 passing):**
+  - 10 guardrail validator tests covering all limit types, sub-item/update/activity rule counting, nested depth
+  - 11 server-side translation tests covering supported operators, AND-only detection, fallback scenarios
+  - 20 existing translator tests updated for server-side behavior
+
+- **Integration tests (5 new, all passing):**
+  - `ServerSideTranslation_ShouldExecuteSimpleAndChains`: Verified server-side query params execute correctly against Monday API
+  - `MaxComplexityFilter_ShouldExecuteSuccessfully`: Filter at exactly maximum complexity (depth=3, rules=50) executes without errors
+  - `ExceedMaxDepth_ShouldThrowGuardrailException`: Filter exceeding depth limit correctly throws `GuardrailViolationException`
+  - `ExceedMaxRuleCount_ShouldThrowGuardrailException`: Filter exceeding rule count (51 rules) correctly throws exception
+  - `DisabledGuardrails_ShouldAllowComplexFilters`: Deeply nested filters (depth=10) execute when guardrails disabled
+
+**Real-world validation:**
+- Tests executed against live Monday board (ID: 18094128211)
+- Server-side translation reduces network overhead by pushing filters to GraphQL layer
+- Guardrail violations caught before API execution, preventing expensive client-side operations
+- Maximum complexity filters process successfully within timeout limits
+
+**Architecture notes:**
+- Followed SOLID principles: Single Responsibility (validator separate from translator), Dependency Inversion (interfaces), Open/Closed (extensible via configuration)
+- Clean Architecture: Domain exceptions, Application layer services, Infrastructure integration
+- Translator validates via injected `IMondayFilterGuardrailValidator` before proceeding
+- Configuration injected via `IOptions<GuardrailOptions>` pattern
+
 ## Next Steps Snapshot
-- Broaden complex filter coverage (multi-column timelines/status/links across parent/sub-item/update/activity cases).
-- Evaluate Monday GraphQL complexity limits and decide which predicates can shift server-side without breaching quotas.
-- Prototype caching/pre-computed lookups for board activity and updates ahead of further optimisation.
+- **Server-side translation expansion**: Monitor real-world usage to identify additional operators worth translating (e.g., date comparisons if Monday API supports them)
+- **Caching/pre-computed lookups**: Deferred until performance metrics prove necessity (activity logs, updates)
+- **Metrics analysis**: Use captured complexity metrics to tune guardrail thresholds based on actual board sizes and query performance
+- **Performance benchmarking**: Compare server-side vs client-side filtering performance on large boards (>1000 items)
+
+
 
 
 
