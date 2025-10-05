@@ -10,7 +10,15 @@ namespace DataWorkflows.Connector.Monday.Application.Filters;
 public sealed record MondayFilterTranslationResult(
     MondayQueryParams? QueryParams,
     Func<MondayItemDto, bool>? ClientPredicate,
-    Func<IEnumerable<MondayItemDto>, bool>? SubItemPredicate);
+    MondaySubItemFilterTranslation? SubItemTranslation,
+    Func<IEnumerable<MondayUpdateDto>, bool>? UpdatePredicate,
+    Func<IEnumerable<MondayActivityLogDto>, bool>? ActivityLogPredicate);
+
+public sealed record MondaySubItemFilterTranslation(
+    Func<MondayItemDto, bool>? ItemPredicate,
+    Func<IEnumerable<MondayUpdateDto>, bool>? UpdatePredicate,
+    Func<IEnumerable<MondayActivityLogDto>, bool>? ActivityLogPredicate,
+    MondayAggregationMode Mode);
 
 /// <summary>
 /// Represents the server-side query parameters to send to Monday GraphQL.
@@ -28,3 +36,4 @@ public sealed record MondayQueryRule(
     string Operator,
     string? CompareValue,
     bool RequiresCompareValue);
+

@@ -1,4 +1,4 @@
-using DataWorkflows.Connector.Monday.Application.DTOs;
+﻿using DataWorkflows.Connector.Monday.Application.DTOs;
 using DataWorkflows.Connector.Monday.Application.Filters;
 using DataWorkflows.Connector.Monday.Application.Interfaces;
 
@@ -131,9 +131,135 @@ public static class MondayFilterDefinitionFixtures
                     MondayAggregationMode.Any),
                 Updates: null)));
 
+        cases.Add(new FilterDefinitionCase(
+            "Has Updates",
+            new MondayFilterDefinition(
+                GroupId: null,
+                Rules: Array.Empty<MondayFilterRule>(),
+                CreatedAt: null,
+                Condition: null,
+                SubItems: null,
+                Updates: new MondayUpdateFilter(Array.Empty<MondayUpdateRule>(), MondayAggregationMode.Any))));
+
+
+
         var timelineColumnId = await TryResolveColumnIdAsync(config.BoardId, config.TimelineColumnTitle, columnResolver, cancellationToken);
         if (!string.IsNullOrWhiteSpace(timelineColumnId))
         {
+            cases.Add(new FilterDefinitionCase(
+                "Complex Composite Filter",
+                new MondayFilterDefinition(
+                    GroupId: null,
+                    Rules: new[] { new MondayFilterRule(statusColumnId, MondayFilterOperators.NotEqualsOperator, "Done") },
+                    CreatedAt: null,
+                    Condition: null,
+                    SubItems: new MondaySubItemFilter(
+                        new MondayFilterDefinition(
+                            GroupId: null,
+                            Rules: Array.Empty<MondayFilterRule>(),
+                            CreatedAt: null,
+                            Condition: new MondayFilterConditionGroup(
+                                Rules: null,
+                                All: new[]
+                                {
+                                    new MondayFilterConditionGroup(
+                                        Rules: new[]
+                                        {
+                                            new MondayFilterRule(
+                                                timelineColumnId!,
+                                                MondayFilterOperators.BeforeOperator,
+                                                new DateTime(2025, 11, 1, 0, 0, 0, DateTimeKind.Utc).ToString("o"),
+                                                ValueType: MondayFilterValueTypes.Timeline)
+                                        },
+                                        All: null,
+                                        Any: null,
+                                        Not: null),
+                                    new MondayFilterConditionGroup(
+                                        Rules: null,
+                                        All: null,
+                                        Any: new[]
+                                        {
+                                            new MondayFilterConditionGroup(
+                                                Rules: new[] { new MondayFilterRule(statusColumnId, MondayFilterOperators.EqualsOperator, statusLabel) },
+                                                All: null,
+                                                Any: null,
+                                                Not: null),
+                                            new MondayFilterConditionGroup(
+                                                Rules: new[] { new MondayFilterRule(statusColumnId, MondayFilterOperators.EqualsOperator, "Planned") },
+                                                All: null,
+                                                Any: null,
+                                                Not: null)
+                                        },
+                                        Not: null)
+                                },
+                                Any: null,
+                                Not: null),
+                            SubItems: null,
+                            Updates: new MondayUpdateFilter(Array.Empty<MondayUpdateRule>(), MondayAggregationMode.Any),
+                            ActivityLogs: new MondayActivityLogFilter(Array.Empty<MondayActivityLogRule>(), MondayAggregationMode.Any)),
+                        MondayAggregationMode.Any),
+                    Updates: new MondayUpdateFilter(Array.Empty<MondayUpdateRule>(), MondayAggregationMode.Any),
+                    ActivityLogs: new MondayActivityLogFilter(Array.Empty<MondayActivityLogRule>(), MondayAggregationMode.Any))));
+
+            cases.Add(new FilterDefinitionCase(
+                "SubItem Timeline + Status With Updates",
+                new MondayFilterDefinition(
+                    GroupId: null,
+                    Rules: Array.Empty<MondayFilterRule>(),
+                    CreatedAt: null,
+                    Condition: null,
+                    SubItems: new MondaySubItemFilter(
+                        new MondayFilterDefinition(
+                            GroupId: null,
+                            Rules: Array.Empty<MondayFilterRule>(),
+                            CreatedAt: null,
+                            Condition: new MondayFilterConditionGroup(
+                                Rules: null,
+                                All: new[]
+                                {
+                                    new MondayFilterConditionGroup(
+                                        Rules: new[]
+                                        {
+                                            new MondayFilterRule(
+                                                timelineColumnId!,
+                                                MondayFilterOperators.BeforeOperator,
+                                                new DateTime(2025, 11, 1, 0, 0, 0, DateTimeKind.Utc).ToString("o"),
+                                                ValueType: MondayFilterValueTypes.Timeline)
+                                        },
+                                        All: null,
+                                        Any: null,
+                                        Not: null),
+                                    new MondayFilterConditionGroup(
+                                        Rules: null,
+                                        All: null,
+                                        Any: new[]
+                                        {
+                                            new MondayFilterConditionGroup(
+                                                Rules: new[]
+                                                {
+                                                    new MondayFilterRule(statusColumnId, MondayFilterOperators.EqualsOperator, statusLabel)
+                                                },
+                                                All: null,
+                                                Any: null,
+                                                Not: null),
+                                            new MondayFilterConditionGroup(
+                                                Rules: new[]
+                                                {
+                                                    new MondayFilterRule(statusColumnId, MondayFilterOperators.EqualsOperator, "Planned")
+                                                },
+                                                All: null,
+                                                Any: null,
+                                                Not: null)
+                                        },
+                                        Not: null)
+                                },
+                                Any: null,
+                                Not: null),
+                            SubItems: null,
+                            Updates: new MondayUpdateFilter(Array.Empty<MondayUpdateRule>(), MondayAggregationMode.Any)),
+                        MondayAggregationMode.Any),
+                    Updates: null)));
+
             cases.Add(new FilterDefinitionCase(
                 "Timeline Ends Before Next Week",
                 new MondayFilterDefinition(
@@ -200,3 +326,6 @@ public static class MondayFilterDefinitionFixtures
         string Name,
         MondayFilterDefinition Definition);
 }
+
+
+

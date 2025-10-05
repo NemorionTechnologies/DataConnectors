@@ -1,4 +1,4 @@
-# Workflow Planning Notes
+ï»¿# Workflow Planning Notes
 
 ## Drivers
 - Centralize project data around Monday items and maintain cross-system links (Slack, Confluence, TaskTracker).
@@ -157,7 +157,7 @@ public sealed record WorkflowEvent(
 ### Clarifications (2025-10-03)
 - Expression engine: standardize on Jint; authoring conditions as JavaScript expressions is acceptable for MVP.
 - Connector lookups: implement GET endpoints with `externalReferenceId` first; evaluate POST/complex payloads later if necessary.
-- Retention job: mark as future work—design it, but no immediate implementation.
+- Retention job: mark as future work--design it, but no immediate implementation.
 - Parameter binding helper: proceed with shared binder extension to convert dictionaries into typed action parameter records.
 ## Condition & Filter Strategy (Draft)
 
@@ -336,4 +336,13 @@ public sealed record WorkflowEvent(
 - Integration coverage now uses typed `MondayFilterDefinition` fixtures (`tests/DataWorkflows.Connector.Monday.IntegrationTests/MondayFilterDefinitionFixtures.cs`) instead of JSON; ensures the workflow engine remains responsible for configuration translation.
 - Step 3 completed (2025-10-10): expanded Monday filter operators (timeline/range comparisons, numeric/date metadata) with schema, translator, evaluator, and tests updated accordingly.
 - Step 4 completed (2025-10-14): sub-item filters wired through `MondaySubItemFilter`, translator now emits nested predicates, `MondayApiClient` materializes sub-items to apply aggregation, and unit/integration coverage exercises representative boards.
-- Step 5 next: fold in updates/activity log filtering via `MondayUpdateFilter`, extend translator support, and broaden integration fixtures for those datasets.
+- Step 5 completed (2025-10-15): update and activity-log filters now compile into predicates, `MondayApiClient` evaluates them alongside sub-item logic, and unit/integration coverage targets representative boards.
+
+## Next Steps Snapshot
+- Broaden complex filter coverage (multi-column timelines/status/links across parent/sub-item/update/activity cases).
+- Evaluate Monday GraphQL complexity limits and decide which predicates can shift server-side without breaching quotas.
+- Prototype caching/pre-computed lookups for board activity and updates ahead of further optimisation.
+
+
+
+

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using DataWorkflows.Connector.Monday.Application.DTOs;
 
@@ -13,10 +13,11 @@ public sealed record MondayFilterDefinition(
     DateRangeFilter? CreatedAt,
     MondayFilterConditionGroup? Condition,
     MondaySubItemFilter? SubItems = null,
-    MondayUpdateFilter? Updates = null)
+    MondayUpdateFilter? Updates = null,
+    MondayActivityLogFilter? ActivityLogs = null)
 {
     public static readonly MondayFilterDefinition Empty =
-        new(null, Array.Empty<MondayFilterRule>(), null, null, null, null);
+        new(null, Array.Empty<MondayFilterRule>(), null, null, null, null, null);
 
     public bool IsEmpty =>
         string.IsNullOrWhiteSpace(GroupId) &&
@@ -24,7 +25,8 @@ public sealed record MondayFilterDefinition(
         CreatedAt is null &&
         (Condition is null || !Condition.HasContent) &&
         SubItems is null &&
-        Updates is null;
+        Updates is null &&
+        ActivityLogs is null;
 }
 
 public enum MondayAggregationMode
@@ -39,7 +41,10 @@ public sealed record MondaySubItemFilter(
 
 public sealed record MondayUpdateFilter(
     IReadOnlyList<MondayUpdateRule> Rules,
-    MondayAggregationMode Mode = MondayAggregationMode.Any);
+    MondayAggregationMode Mode = MondayAggregationMode.Any)
+{
+    public bool HasRules => Rules is { Count: > 0 };
+}
 
 public sealed record MondayUpdateRule(
     string Field,
@@ -54,3 +59,25 @@ public static class MondayUpdateFields
     public const string CreatorId = "creatorId";
     public const string CreatedAt = "createdAt";
 }
+
+
+public sealed record MondayActivityLogFilter(
+    IReadOnlyList<MondayActivityLogRule> Rules,
+    MondayAggregationMode Mode = MondayAggregationMode.Any)
+{
+    public bool HasRules => Rules is { Count: > 0 };
+}
+
+public sealed record MondayActivityLogRule(
+    string Field,
+    string Operator,
+    string? Value,
+    string? SecondValue = null);
+
+public static class MondayActivityLogFields
+{
+    public const string EventType = "eventType";
+    public const string UserId = "userId";
+    public const string CreatedAt = "createdAt";
+}
+

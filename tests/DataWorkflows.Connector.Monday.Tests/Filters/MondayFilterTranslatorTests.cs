@@ -1,4 +1,4 @@
-using DataWorkflows.Connector.Monday.Application.DTOs;
+﻿using DataWorkflows.Connector.Monday.Application.DTOs;
 using DataWorkflows.Connector.Monday.Application.Filters;
 using FluentAssertions;
 using System.Globalization;
@@ -18,7 +18,9 @@ public class MondayFilterTranslatorTests
 
         result.QueryParams.Should().BeNull();
         result.ClientPredicate.Should().BeNull();
-        result.SubItemPredicate.Should().BeNull();
+        result.SubItemTranslation.Should().BeNull();
+        result.UpdatePredicate.Should().BeNull();
+        result.ActivityLogPredicate.Should().BeNull();
     }
 
     [Fact]
@@ -288,7 +290,7 @@ public class MondayFilterTranslatorTests
     }
 
     [Fact]
-    public void Translate_ShouldBuildSubItemPredicate_ForAnyMode()
+    public void Translate_ShouldBuildSubItemTranslation_ForAnyMode()
     {
         var subItemDefinition = new MondayFilterDefinition(
             GroupId: null,
@@ -308,25 +310,17 @@ public class MondayFilterTranslatorTests
 
         var result = _translator.Translate(filter);
 
-        result.SubItemPredicate.Should().NotBeNull();
-
-        var matchingSubItems = new[]
-        {
-            CreateItem("status", "In Progress"),
-            CreateItem("status", "Done")
-        };
-
-        var nonMatchingSubItems = new[]
-        {
-            CreateItem("status", "In Progress")
-        };
-
-        result.SubItemPredicate!(matchingSubItems).Should().BeTrue();
-        result.SubItemPredicate!(nonMatchingSubItems).Should().BeFalse();
+        result.SubItemTranslation.Should().NotBeNull();
+        result.SubItemTranslation!.Mode.Should().Be(MondayAggregationMode.Any);
+        result.SubItemTranslation!.UpdatePredicate.Should().BeNull();
+        result.SubItemTranslation!.ItemPredicate!(CreateItem("status", "Done")).Should().BeTrue();
+        result.SubItemTranslation!.ItemPredicate!(CreateItem("status", "In Progress")).Should().BeFalse();
     }
 
+
+
     [Fact]
-    public void Translate_ShouldBuildSubItemPredicate_ForAllMode()
+    public void Translate_ShouldBuildSubItemTranslation_ForAllMode()
     {
         var subItemDefinition = new MondayFilterDefinition(
             GroupId: null,
@@ -346,25 +340,332 @@ public class MondayFilterTranslatorTests
 
         var result = _translator.Translate(filter);
 
-        result.SubItemPredicate.Should().NotBeNull();
+        result.SubItemTranslation.Should().NotBeNull();
+        result.SubItemTranslation!.Mode.Should().Be(MondayAggregationMode.All);
+        result.SubItemTranslation!.UpdatePredicate.Should().BeNull();
+        result.SubItemTranslation!.ItemPredicate!(CreateItem("status", "Done")).Should().BeTrue();
+        result.SubItemTranslation!.ItemPredicate!(CreateItem("status", "In Progress")).Should().BeFalse();
+    }
 
-        var allMatching = new[]
+
+
+    [Fact]
+    public void Translate_ShouldBuildUpdatePredicate_ForAnyMode()
+    {
+        var filter = new MondayFilterDefinition(
+            GroupId: null,
+            Rules: Array.Empty<MondayFilterRule>(),
+            CreatedAt: null,
+            Condition: null,
+            SubItems: null,
+            Updates: new MondayUpdateFilter(Array.Empty<MondayUpdateRule>(), MondayAggregationMode.Any));
+
+        var result = _translator.Translate(filter);
+
+        result.UpdatePredicate.Should().NotBeNull();
+        result.UpdatePredicate!(new[] { CreateUpdate(body: "Initial update") }).Should().BeTrue();
+        result.UpdatePredicate!(Array.Empty<MondayUpdateDto>()).Should().BeFalse();
+    }
+
+    [Fact]
+    public void Translate_ShouldBuildUpdatePredicate_ForAllMode()
+    {
+        var filter = new MondayFilterDefinition(
+            GroupId: null,
+            Rules: Array.Empty<MondayFilterRule>(),
+            CreatedAt: null,
+            Condition: null,
+            SubItems: null,
+            Updates: new MondayUpdateFilter(
+                new[]
+                {
+                    new MondayUpdateRule(MondayUpdateFields.Body, MondayFilterOperators.ContainsOperator, "done"),
+                    new MondayUpdateRule(MondayUpdateFields.CreatorId, MondayFilterOperators.EqualsOperator, "user-1")
+                },
+                MondayAggregationMode.All));
+
+        var result = _translator.Translate(filter);
+
+        result.UpdatePredicate.Should().NotBeNull();
+        result.UpdatePredicate!(new[]
         {
-            CreateItem("status", "Done"),
-            CreateItem("status", "Done")
-        };
-
-        var partiallyMatching = new[]
+            CreateUpdate(body: "all DONE", creatorId: "user-1"),
+            CreateUpdate(body: "Done", creatorId: "user-1")
+        }).Should().BeTrue();
+        result.UpdatePredicate!(new[]
         {
-            CreateItem("status", "Done"),
-            CreateItem("status", "In Progress")
+            CreateUpdate(body: "Done", creatorId: "user-1"),
+            CreateUpdate(body: "Done", creatorId: "user-2")
+        }).Should().BeFalse();
+    }
+
+    [Fact]
+    public void Translate_ShouldBuildActivityLogPredicate_ForAnyMode()
+    {
+        var filter = new MondayFilterDefinition(
+            GroupId: null,
+            Rules: Array.Empty<MondayFilterRule>(),
+            CreatedAt: null,
+            Condition: null,
+            SubItems: null,
+            Updates: null,
+            ActivityLogs: new MondayActivityLogFilter(Array.Empty<MondayActivityLogRule>(), MondayAggregationMode.Any));
+
+        var result = _translator.Translate(filter);
+
+        result.ActivityLogPredicate.Should().NotBeNull();
+        result.ActivityLogPredicate!(new[] { CreateActivityLog() }).Should().BeTrue();
+        result.ActivityLogPredicate!(Array.Empty<MondayActivityLogDto>()).Should().BeFalse();
+    }
+
+    [Fact]
+    public void Translate_ShouldBuildActivityLogPredicate_ForAllMode()
+    {
+        var filter = new MondayFilterDefinition(
+            GroupId: null,
+            Rules: Array.Empty<MondayFilterRule>(),
+            CreatedAt: null,
+            Condition: null,
+            SubItems: null,
+            Updates: null,
+            ActivityLogs: new MondayActivityLogFilter(
+                new[]
+                {
+                    new MondayActivityLogRule(MondayActivityLogFields.EventType, MondayFilterOperators.EqualsOperator, "status_changed"),
+                    new MondayActivityLogRule(MondayActivityLogFields.UserId, MondayFilterOperators.EqualsOperator, "user-1")
+                },
+                MondayAggregationMode.All));
+
+        var result = _translator.Translate(filter);
+
+        result.ActivityLogPredicate.Should().NotBeNull();
+        result.ActivityLogPredicate!(new[]
+        {
+            CreateActivityLog(eventType: "status_changed", userId: "user-1"),
+            CreateActivityLog(eventType: "status_changed", userId: "user-1")
+        }).Should().BeTrue();
+
+        result.ActivityLogPredicate!(new[]
+        {
+            CreateActivityLog(eventType: "status_changed", userId: "user-1"),
+            CreateActivityLog(eventType: "status_changed", userId: "user-2")
+        }).Should().BeFalse();
+    }
+
+
+    [Fact]
+    public void Translate_ShouldBuildCompositePredicates()
+    {
+        var cutoff = DateTime.UtcNow.AddDays(-5);
+
+        var subItemDefinition = new MondayFilterDefinition(
+            GroupId: null,
+            Rules: Array.Empty<MondayFilterRule>(),
+            CreatedAt: null,
+            Condition: new MondayFilterConditionGroup(
+                Rules: null,
+                All: new[]
+                {
+                    new MondayFilterConditionGroup(
+                        Rules: new[]
+                        {
+                            new MondayFilterRule(
+                                "timeline",
+                                MondayFilterOperators.BeforeOperator,
+                                new DateTime(2025, 11, 1, 0, 0, 0, DateTimeKind.Utc).ToString("o"),
+                                ValueType: MondayFilterValueTypes.Timeline)
+                        },
+                        All: null,
+                        Any: null,
+                        Not: null),
+                    new MondayFilterConditionGroup(
+                        Rules: null,
+                        All: null,
+                        Any: new[]
+                        {
+                            new MondayFilterConditionGroup(
+                                Rules: new[] { new MondayFilterRule("status", MondayFilterOperators.EqualsOperator, "Working on it") },
+                                All: null,
+                                Any: null,
+                                Not: null),
+                            new MondayFilterConditionGroup(
+                                Rules: new[] { new MondayFilterRule("status", MondayFilterOperators.EqualsOperator, "Planned") },
+                                All: null,
+                                Any: null,
+                                Not: null)
+                        },
+                        Not: null)
+                },
+                Any: null,
+                Not: null),
+            SubItems: null,
+            Updates: new MondayUpdateFilter(
+                new[] { new MondayUpdateRule(MondayUpdateFields.CreatorId, MondayFilterOperators.EqualsOperator, "user-1") },
+                MondayAggregationMode.All),
+            ActivityLogs: new MondayActivityLogFilter(
+                new[] { new MondayActivityLogRule(MondayActivityLogFields.EventType, MondayFilterOperators.ContainsOperator, "status") },
+                MondayAggregationMode.Any));
+
+        var filter = new MondayFilterDefinition(
+            GroupId: null,
+            Rules: Array.Empty<MondayFilterRule>(),
+            CreatedAt: null,
+            Condition: new MondayFilterConditionGroup(
+                Rules: new[] { new MondayFilterRule("parentStatus", MondayFilterOperators.EqualsOperator, "Target") },
+                All: null,
+                Any: null,
+                Not: null),
+            SubItems: new MondaySubItemFilter(subItemDefinition, MondayAggregationMode.Any),
+            Updates: new MondayUpdateFilter(
+                new[] { new MondayUpdateRule(MondayUpdateFields.Body, MondayFilterOperators.ContainsOperator, "ready") },
+                MondayAggregationMode.Any),
+            ActivityLogs: new MondayActivityLogFilter(
+                new[] { new MondayActivityLogRule(MondayActivityLogFields.CreatedAt, MondayFilterOperators.AfterOperator, cutoff.ToString("o")) },
+                MondayAggregationMode.Any));
+
+        var result = _translator.Translate(filter);
+
+        result.ClientPredicate.Should().NotBeNull();
+        result.UpdatePredicate.Should().NotBeNull();
+        result.ActivityLogPredicate.Should().NotBeNull();
+        result.SubItemTranslation.Should().NotBeNull();
+
+        var parent = CreateItem("parentStatus", "Target");
+        result.ClientPredicate!(parent).Should().BeTrue();
+        result.ClientPredicate!(CreateItem("parentStatus", "Other")).Should().BeFalse();
+
+        var parentUpdates = new[] { CreateUpdate(body: "Ready for launch") };
+        result.UpdatePredicate!(parentUpdates).Should().BeTrue();
+        result.UpdatePredicate!(new[] { CreateUpdate(body: "Something else") }).Should().BeFalse();
+
+        var parentLogs = new[] { CreateActivityLog(createdAt: DateTimeOffset.UtcNow) };
+        result.ActivityLogPredicate!(parentLogs).Should().BeTrue();
+        result.ActivityLogPredicate!(new[] { CreateActivityLog(createdAt: DateTimeOffset.UtcNow.AddDays(-10)) }).Should().BeFalse();
+
+        var subTranslation = result.SubItemTranslation!;
+        subTranslation.ItemPredicate.Should().NotBeNull();
+        subTranslation.UpdatePredicate.Should().NotBeNull();
+        subTranslation.ActivityLogPredicate.Should().NotBeNull();
+        subTranslation.Mode.Should().Be(MondayAggregationMode.Any);
+
+        var matchingSubItem = CreateTimelineItem("timeline", DateTime.UtcNow.AddDays(-15), DateTime.UtcNow.AddDays(-2));
+        matchingSubItem.ColumnValues["status"] = new MondayColumnValueDto { Id = "status", Text = "Working on it" };
+        subTranslation.ItemPredicate!(matchingSubItem).Should().BeTrue();
+
+        var failingSubItem = CreateTimelineItem("timeline", new DateTime(2025, 12, 1, 0, 0, 0, DateTimeKind.Utc), new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc));
+        failingSubItem.ColumnValues["status"] = new MondayColumnValueDto { Id = "status", Text = "Working on it" };
+        subTranslation.ItemPredicate!(failingSubItem).Should().BeFalse();
+
+        var subUpdates = new[] { CreateUpdate(creatorId: "user-1") };
+        subTranslation.UpdatePredicate!(subUpdates).Should().BeTrue();
+        subTranslation.UpdatePredicate!(new[] { CreateUpdate(creatorId: "user-2") }).Should().BeFalse();
+
+        var subLogs = new[] { CreateActivityLog(eventType: "status_changed") };
+        subTranslation.ActivityLogPredicate!(subLogs).Should().BeTrue();
+        subTranslation.ActivityLogPredicate!(new[] { CreateActivityLog(eventType: "comment_added") }).Should().BeFalse();
+    }
+
+    [Fact]
+    public void Translate_ShouldBuildSubItemTranslation_WithActivityLogPredicate()
+    {
+        var subItemDefinition = new MondayFilterDefinition(
+            GroupId: null,
+            Rules: Array.Empty<MondayFilterRule>(),
+            CreatedAt: null,
+            Condition: null,
+            SubItems: null,
+            Updates: null,
+            ActivityLogs: new MondayActivityLogFilter(Array.Empty<MondayActivityLogRule>(), MondayAggregationMode.Any));
+
+        var filter = new MondayFilterDefinition(
+            GroupId: null,
+            Rules: Array.Empty<MondayFilterRule>(),
+            CreatedAt: null,
+            Condition: null,
+            SubItems: new MondaySubItemFilter(subItemDefinition, MondayAggregationMode.All),
+            Updates: null);
+
+        var result = _translator.Translate(filter);
+
+        result.SubItemTranslation.Should().NotBeNull();
+        result.SubItemTranslation!.ActivityLogPredicate.Should().NotBeNull();
+        result.SubItemTranslation!.Mode.Should().Be(MondayAggregationMode.All);
+    }
+
+    [Fact]
+    public void Translate_ShouldBuildUpdatePredicate_ForDateFilters()
+    {
+        var cutoff = DateTime.UtcNow.AddDays(-1);
+
+        var filter = new MondayFilterDefinition(
+            GroupId: null,
+            Rules: Array.Empty<MondayFilterRule>(),
+            CreatedAt: null,
+            Condition: null,
+            SubItems: null,
+            Updates: new MondayUpdateFilter(
+                new[]
+                {
+                    new MondayUpdateRule(MondayUpdateFields.CreatedAt, MondayFilterOperators.AfterOperator, cutoff.ToString("o"))
+                },
+                MondayAggregationMode.Any));
+
+        var result = _translator.Translate(filter);
+
+        result.UpdatePredicate.Should().NotBeNull();
+        result.UpdatePredicate!(new[] { CreateUpdate(createdAt: DateTimeOffset.UtcNow) }).Should().BeTrue();
+        result.UpdatePredicate!(new[] { CreateUpdate(createdAt: cutoff.AddHours(-2)) }).Should().BeFalse();
+    }
+
+    [Fact]
+    public void Translate_ShouldBuildSubItemTranslation_WithUpdatePredicate()
+    {
+        var subItemDefinition = new MondayFilterDefinition(
+            GroupId: null,
+            Rules: Array.Empty<MondayFilterRule>(),
+            CreatedAt: null,
+            Condition: null,
+            SubItems: null,
+            Updates: new MondayUpdateFilter(Array.Empty<MondayUpdateRule>(), MondayAggregationMode.Any));
+
+        var filter = new MondayFilterDefinition(
+            GroupId: null,
+            Rules: Array.Empty<MondayFilterRule>(),
+            CreatedAt: null,
+            Condition: null,
+            SubItems: new MondaySubItemFilter(subItemDefinition, MondayAggregationMode.Any),
+            Updates: null);
+
+        var result = _translator.Translate(filter);
+
+        result.SubItemTranslation.Should().NotBeNull();
+        result.SubItemTranslation!.UpdatePredicate.Should().NotBeNull();
+        result.SubItemTranslation!.ActivityLogPredicate.Should().BeNull();
+        result.SubItemTranslation!.Mode.Should().Be(MondayAggregationMode.Any);
+    }
+
+    private static MondayActivityLogDto CreateActivityLog(string? eventType = null, string? userId = null, DateTimeOffset? createdAt = null, string? itemId = null)
+    {
+        return new MondayActivityLogDto
+        {
+            EventType = eventType ?? "status_changed",
+            UserId = userId ?? "user-1",
+            ItemId = itemId,
+            CreatedAt = createdAt ?? DateTimeOffset.UtcNow,
+            EventDataJson = "{}"
         };
+    }
 
-        var noSubItems = Array.Empty<MondayItemDto>();
-
-        result.SubItemPredicate!(allMatching).Should().BeTrue();
-        result.SubItemPredicate!(partiallyMatching).Should().BeFalse();
-        result.SubItemPredicate!(noSubItems).Should().BeFalse();
+    private static MondayUpdateDto CreateUpdate(string? body = null, string? creatorId = null, DateTimeOffset? createdAt = null)
+    {
+        return new MondayUpdateDto
+        {
+            Id = Guid.NewGuid().ToString(),
+            ItemId = Guid.NewGuid().ToString(),
+            BodyText = body ?? string.Empty,
+            CreatorId = creatorId ?? "user-1",
+            CreatedAt = createdAt ?? DateTimeOffset.UtcNow
+        };
     }
 
     private static MondayItemDto CreateItem(string columnId = "status", string? text = null, DateTimeOffset? createdAt = null)
@@ -454,5 +755,11 @@ public class MondayFilterTranslatorTests
         };
     }
 }
+
+
+
+
+
+
 
 

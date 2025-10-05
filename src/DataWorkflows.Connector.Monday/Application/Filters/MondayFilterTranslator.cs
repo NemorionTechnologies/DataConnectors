@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -22,19 +22,21 @@ public class MondayFilterTranslator : IMondayFilterTranslator
     {
         if (filterDefinition is null || filterDefinition.IsEmpty)
         {
-            return new MondayFilterTranslationResult(null, null, null);
+            return new MondayFilterTranslationResult(null, null, null, null, null);
         }
 
         var rootCondition = BuildRootCondition(filterDefinition);
         var predicate = BuildPredicate(rootCondition, filterDefinition.CreatedAt);
-        var subItemPredicate = BuildSubItemPredicate(filterDefinition.SubItems);
+        var subItemTranslation = BuildSubItemTranslation(filterDefinition.SubItems);
+        var updatePredicate = BuildUpdatePredicate(filterDefinition.Updates);
+        var activityPredicate = BuildActivityLogPredicate(filterDefinition.ActivityLogs);
 
-        if (predicate is null && subItemPredicate is null)
+        if (predicate is null && subItemTranslation is null && updatePredicate is null && activityPredicate is null)
         {
             _logger.LogDebug("Filter definition produced no executable predicate.");
         }
 
-        return new MondayFilterTranslationResult(null, predicate, subItemPredicate);
+        return new MondayFilterTranslationResult(null, predicate, subItemTranslation, updatePredicate, activityPredicate);
     }
 
     private static MondayFilterConditionGroup? BuildRootCondition(MondayFilterDefinition definition)
@@ -95,7 +97,7 @@ public class MondayFilterTranslator : IMondayFilterTranslator
         };
     }
 
-    private static Func<IEnumerable<MondayItemDto>, bool>? BuildSubItemPredicate(MondaySubItemFilter? subItemFilter)
+    private static MondaySubItemFilterTranslation? BuildSubItemTranslation(MondaySubItemFilter? subItemFilter)
     {
         if (subItemFilter is null)
         {
@@ -104,52 +106,322 @@ public class MondayFilterTranslator : IMondayFilterTranslator
 
         var childCondition = BuildRootCondition(subItemFilter.Definition);
         var childPredicate = BuildPredicate(childCondition, subItemFilter.Definition.CreatedAt);
+        var childUpdatePredicate = BuildUpdatePredicate(subItemFilter.Definition.Updates);
+        var childActivityPredicate = BuildActivityLogPredicate(subItemFilter.Definition.ActivityLogs);
 
-        return subItemFilter.Mode switch
+        if (childPredicate is null && childUpdatePredicate is null && childActivityPredicate is null)
         {
-            MondayAggregationMode.All => subItems =>
+            childPredicate = _ => true;
+        }
+
+        return new MondaySubItemFilterTranslation(childPredicate, childUpdatePredicate, childActivityPredicate, subItemFilter.Mode);
+    }
+
+
+    private static Func<IEnumerable<MondayActivityLogDto>, bool>? BuildActivityLogPredicate(MondayActivityLogFilter? activityLogFilter)
+    {
+        if (activityLogFilter is null)
+        {
+            return null;
+        }
+
+        var rulePredicate = BuildActivityLogRulePredicate(activityLogFilter.Rules);
+
+        return activityLogFilter.Mode switch
+        {
+            MondayAggregationMode.All => logs =>
             {
-                if (subItems is null)
+                if (logs is null)
                 {
                     return false;
                 }
 
-                var materialized = subItems as ICollection<MondayItemDto> ?? subItems.ToList();
+                var materialized = logs as IList<MondayActivityLogDto> ?? logs.ToList();
 
                 if (materialized.Count == 0)
                 {
                     return false;
                 }
 
-                if (childPredicate is null)
+                if (rulePredicate is null)
                 {
                     return true;
                 }
 
-                return materialized.All(childPredicate);
+                return materialized.All(rulePredicate);
             },
-            _ => subItems =>
+            _ => logs =>
             {
-                if (subItems is null)
+                if (logs is null)
                 {
                     return false;
                 }
 
-                var materialized = subItems as ICollection<MondayItemDto> ?? subItems.ToList();
+                var materialized = logs as IList<MondayActivityLogDto> ?? logs.ToList();
 
                 if (materialized.Count == 0)
                 {
                     return false;
                 }
 
-                if (childPredicate is null)
+                if (rulePredicate is null)
                 {
                     return true;
                 }
 
-                return materialized.Any(childPredicate);
+                return materialized.Any(rulePredicate);
             }
         };
+    }
+
+    private static Func<MondayActivityLogDto, bool>? BuildActivityLogRulePredicate(IReadOnlyList<MondayActivityLogRule>? rules)
+    {
+        if (rules is not { Count: > 0 })
+        {
+            return null;
+        }
+
+        return log => rules.All(rule => EvaluateActivityLogRule(log, rule));
+    }
+
+    private static bool EvaluateActivityLogRule(MondayActivityLogDto log, MondayActivityLogRule rule)
+    {
+        switch (rule.Field)
+        {
+            case var field when string.Equals(field, MondayActivityLogFields.EventType, StringComparison.OrdinalIgnoreCase):
+                return EvaluateTextRule(log.EventType, rule);
+            case var field when string.Equals(field, MondayActivityLogFields.UserId, StringComparison.OrdinalIgnoreCase):
+                return EvaluateTextRule(log.UserId, rule);
+            case var field when string.Equals(field, MondayActivityLogFields.CreatedAt, StringComparison.OrdinalIgnoreCase):
+                return EvaluateActivityDate(log.CreatedAt, rule);
+            default:
+                return true;
+        }
+    }
+
+    private static bool EvaluateActivityDate(DateTimeOffset actual, MondayActivityLogRule rule)
+    {
+        var op = rule.Operator;
+        if (string.Equals(op, MondayFilterOperators.BetweenOperator, StringComparison.OrdinalIgnoreCase))
+        {
+            if (!TryParseDate(rule.Value, out var start) || !TryParseDate(rule.SecondValue, out var end))
+            {
+                return false;
+            }
+
+            var (min, max) = start <= end ? (start, end) : (end, start);
+            var actualUtc = actual.UtcDateTime;
+            return actualUtc >= min && actualUtc <= max;
+        }
+
+        if (!TryParseDate(rule.Value, out var target))
+        {
+            return false;
+        }
+
+        var actualDate = actual.UtcDateTime;
+
+        return op switch
+        {
+            var o when string.Equals(o, MondayFilterOperators.EqualsOperator, StringComparison.OrdinalIgnoreCase) => actualDate == target,
+            var o when string.Equals(o, MondayFilterOperators.GreaterThanOperator, StringComparison.OrdinalIgnoreCase) => actualDate > target,
+            var o when string.Equals(o, MondayFilterOperators.GreaterThanOrEqualOperator, StringComparison.OrdinalIgnoreCase) => actualDate >= target,
+            var o when string.Equals(o, MondayFilterOperators.LessThanOperator, StringComparison.OrdinalIgnoreCase) => actualDate < target,
+            var o when string.Equals(o, MondayFilterOperators.LessThanOrEqualOperator, StringComparison.OrdinalIgnoreCase) => actualDate <= target,
+            var o when string.Equals(o, MondayFilterOperators.BeforeOperator, StringComparison.OrdinalIgnoreCase) => actualDate <= target,
+            var o when string.Equals(o, MondayFilterOperators.AfterOperator, StringComparison.OrdinalIgnoreCase) => actualDate >= target,
+            _ => false
+        };
+    }
+
+    private static bool EvaluateTextRule(string actual, MondayActivityLogRule rule)
+    {
+        actual ??= string.Empty;
+        var comparison = rule.Value ?? string.Empty;
+
+        return rule.Operator switch
+        {
+            var op when string.Equals(op, MondayFilterOperators.EqualsOperator, StringComparison.OrdinalIgnoreCase) =>
+                string.Equals(actual, comparison, StringComparison.OrdinalIgnoreCase),
+            var op when string.Equals(op, MondayFilterOperators.NotEqualsOperator, StringComparison.OrdinalIgnoreCase) =>
+                !string.Equals(actual, comparison, StringComparison.OrdinalIgnoreCase),
+            var op when string.Equals(op, MondayFilterOperators.ContainsOperator, StringComparison.OrdinalIgnoreCase) =>
+                actual.IndexOf(comparison, StringComparison.OrdinalIgnoreCase) >= 0,
+            var op when string.Equals(op, MondayFilterOperators.IsEmptyOperator, StringComparison.OrdinalIgnoreCase) =>
+                string.IsNullOrWhiteSpace(actual),
+            _ => false
+        };
+    }
+    private static Func<IEnumerable<MondayUpdateDto>, bool>? BuildUpdatePredicate(MondayUpdateFilter? updateFilter)
+    {
+        if (updateFilter is null)
+        {
+            return null;
+        }
+
+        var updateRulePredicate = BuildUpdateRulePredicate(updateFilter.Rules);
+
+        return updateFilter.Mode switch
+        {
+            MondayAggregationMode.All => updates =>
+            {
+                if (updates is null)
+                {
+                    return false;
+                }
+
+                var materialized = updates as ICollection<MondayUpdateDto> ?? updates.ToList();
+
+                if (materialized.Count == 0)
+                {
+                    return false;
+                }
+
+                if (updateRulePredicate is null)
+                {
+                    return true;
+                }
+
+                return materialized.All(updateRulePredicate);
+            },
+            _ => updates =>
+            {
+                if (updates is null)
+                {
+                    return false;
+                }
+
+                var materialized = updates as ICollection<MondayUpdateDto> ?? updates.ToList();
+
+                if (materialized.Count == 0)
+                {
+                    return false;
+                }
+
+                if (updateRulePredicate is null)
+                {
+                    return true;
+                }
+
+                return materialized.Any(updateRulePredicate);
+            }
+        };
+    }
+
+    private static Func<MondayUpdateDto, bool>? BuildUpdateRulePredicate(IReadOnlyList<MondayUpdateRule>? rules)
+    {
+        if (rules is not { Count: > 0 })
+        {
+            return null;
+        }
+
+        return update => rules.All(rule => EvaluateUpdateRule(update, rule));
+    }
+
+    private static bool EvaluateUpdateRule(MondayUpdateDto update, MondayUpdateRule rule)
+    {
+        if (rule is null)
+        {
+            return true;
+        }
+
+        var field = rule.Field ?? string.Empty;
+
+        if (string.Equals(field, MondayUpdateFields.Body, StringComparison.OrdinalIgnoreCase))
+        {
+            return EvaluateUpdateText(update.BodyText, rule);
+        }
+
+        if (string.Equals(field, MondayUpdateFields.CreatorId, StringComparison.OrdinalIgnoreCase))
+        {
+            return EvaluateUpdateText(update.CreatorId, rule);
+        }
+
+        if (string.Equals(field, MondayUpdateFields.CreatedAt, StringComparison.OrdinalIgnoreCase))
+        {
+            return EvaluateUpdateDate(update.CreatedAt, rule);
+        }
+
+        return true;
+    }
+
+    private static bool EvaluateUpdateText(string? actual, MondayUpdateRule rule)
+    {
+        actual ??= string.Empty;
+
+        return rule.Operator switch
+        {
+            var op when string.Equals(op, MondayFilterOperators.EqualsOperator, StringComparison.OrdinalIgnoreCase)
+                => !string.IsNullOrWhiteSpace(rule.Value) && string.Equals(actual, rule.Value, StringComparison.OrdinalIgnoreCase),
+            var op when string.Equals(op, MondayFilterOperators.NotEqualsOperator, StringComparison.OrdinalIgnoreCase)
+                => !string.IsNullOrWhiteSpace(rule.Value) && !string.Equals(actual, rule.Value, StringComparison.OrdinalIgnoreCase),
+            var op when string.Equals(op, MondayFilterOperators.ContainsOperator, StringComparison.OrdinalIgnoreCase)
+                => !string.IsNullOrWhiteSpace(rule.Value) && actual.IndexOf(rule.Value, StringComparison.OrdinalIgnoreCase) >= 0,
+            var op when string.Equals(op, MondayFilterOperators.IsEmptyOperator, StringComparison.OrdinalIgnoreCase)
+                => string.IsNullOrWhiteSpace(actual),
+            _ => false
+        };
+    }
+
+    private static bool EvaluateUpdateDate(DateTimeOffset actual, MondayUpdateRule rule)
+    {
+        var op = rule.Operator;
+
+        if (string.Equals(op, MondayFilterOperators.BetweenOperator, StringComparison.OrdinalIgnoreCase))
+        {
+            if (!TryParseDate(rule.Value, out var start) || !TryParseDate(rule.SecondValue, out var end))
+            {
+                return false;
+            }
+
+            var (min, max) = start <= end ? (start, end) : (end, start);
+            var utcActual = actual.UtcDateTime;
+            return utcActual >= min && utcActual <= max;
+        }
+
+        if (!TryParseDate(rule.Value, out var target))
+        {
+            return false;
+        }
+
+        var actualUtc = actual.UtcDateTime;
+
+        if (string.Equals(op, MondayFilterOperators.EqualsOperator, StringComparison.OrdinalIgnoreCase))
+        {
+            return actualUtc == target;
+        }
+
+        if (string.Equals(op, MondayFilterOperators.GreaterThanOperator, StringComparison.OrdinalIgnoreCase))
+        {
+            return actualUtc > target;
+        }
+
+        if (string.Equals(op, MondayFilterOperators.GreaterThanOrEqualOperator, StringComparison.OrdinalIgnoreCase))
+        {
+            return actualUtc >= target;
+        }
+
+        if (string.Equals(op, MondayFilterOperators.LessThanOperator, StringComparison.OrdinalIgnoreCase))
+        {
+            return actualUtc < target;
+        }
+
+        if (string.Equals(op, MondayFilterOperators.LessThanOrEqualOperator, StringComparison.OrdinalIgnoreCase))
+        {
+            return actualUtc <= target;
+        }
+
+        if (string.Equals(op, MondayFilterOperators.BeforeOperator, StringComparison.OrdinalIgnoreCase))
+        {
+            return actualUtc <= target;
+        }
+
+        if (string.Equals(op, MondayFilterOperators.AfterOperator, StringComparison.OrdinalIgnoreCase))
+        {
+            return actualUtc >= target;
+        }
+
+        return false;
     }
 
     private static bool EvaluateGroup(MondayFilterConditionGroup? group, MondayItemDto item)
@@ -495,3 +767,13 @@ public static class MondayFilterOperators
     public const string AfterOperator = "after";
     public const string BetweenOperator = "between";
 }
+
+
+
+
+
+
+
+
+
+

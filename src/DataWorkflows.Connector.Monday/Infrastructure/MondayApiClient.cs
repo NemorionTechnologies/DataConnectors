@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http.Headers;
 using System.Text;
@@ -60,18 +60,42 @@ public class MondayApiClient : IMondayApiClient
             items = items.Where(translation.ClientPredicate).ToList();
         }
 
-        if (translation.SubItemPredicate is not null)
+        IReadOnlyDictionary<string, IReadOnlyList<MondayActivityLogDto>>? activityLogLookup = null;
+        if (translation.ActivityLogPredicate is not null || translation.SubItemTranslation?.ActivityLogPredicate is not null)
         {
-            items = await ApplySubItemFilterAsync(items, translation.SubItemPredicate, cancellationToken);
+            var activityLogs = (await GetBoardActivityAsync(boardId, null, null, cancellationToken)).ToList();
+            activityLogLookup = activityLogs
+                .Where(log => !string.IsNullOrWhiteSpace(log.ItemId))
+                .GroupBy(log => log.ItemId!)
+                .ToDictionary(
+                    group => group.Key,
+                    group => (IReadOnlyList<MondayActivityLogDto>)group.ToList());
+        }
+
+        if (translation.SubItemTranslation is not null)
+        {
+            items = await ApplySubItemFilterAsync(items, translation.SubItemTranslation, cancellationToken, activityLogLookup);
+        }
+
+        if (translation.UpdatePredicate is not null)
+        {
+            items = await ApplyUpdateFilterAsync(items, translation.UpdatePredicate, cancellationToken);
+        }
+
+        if (translation.ActivityLogPredicate is not null)
+        {
+            items = ApplyActivityLogFilter(items, translation.ActivityLogPredicate, activityLogLookup);
         }
 
         return items;
     }
 
+
     private async Task<List<MondayItemDto>> ApplySubItemFilterAsync(
         List<MondayItemDto> parentItems,
-        Func<IEnumerable<MondayItemDto>, bool> subItemPredicate,
-        CancellationToken cancellationToken)
+        MondaySubItemFilterTranslation translation,
+        CancellationToken cancellationToken,
+        IReadOnlyDictionary<string, IReadOnlyList<MondayActivityLogDto>>? activityLogLookup)
     {
         if (parentItems.Count == 0)
         {
@@ -82,7 +106,108 @@ public class MondayApiClient : IMondayApiClient
         {
             var subItems = await GetSubItemsAsync(item.Id, MondayFilterDefinition.Empty, cancellationToken);
             var materialized = subItems as IList<MondayItemDto> ?? subItems.ToList();
-            var include = subItemPredicate(materialized);
+
+            if (materialized.Count == 0)
+            {
+                return (Item: item, Include: false);
+            }
+
+            var itemPredicate = translation.ItemPredicate ?? (_ => true);
+            var updatePredicate = translation.UpdatePredicate;
+
+            var activityPredicate = translation.ActivityLogPredicate;
+            var matches = new List<MondayItemDto>();
+
+            foreach (var subItem in materialized)
+            {
+                if (string.IsNullOrEmpty(subItem.Id))
+                {
+                    continue;
+                }
+
+                if (!itemPredicate(subItem))
+                {
+                    continue;
+                }
+
+                if (updatePredicate is not null)
+                {
+                    var updates = await GetItemUpdatesAsync(subItem.Id, null, null, cancellationToken);
+                    var materializedUpdates = updates as IList<MondayUpdateDto> ?? updates.ToList();
+
+                    if (!updatePredicate(materializedUpdates))
+                    {
+                        continue;
+                    }
+                }
+
+                if (activityPredicate is not null)
+                {
+                    var logs = activityLogLookup is not null && subItem.Id is not null && activityLogLookup.TryGetValue(subItem.Id, out var subItemLogs)
+                        ? subItemLogs
+                        : Array.Empty<MondayActivityLogDto>();
+
+                    if (!activityPredicate(logs))
+                    {
+                        continue;
+                    }
+                }
+
+                matches.Add(subItem);
+            }
+
+            var include = translation.Mode switch
+            {
+                MondayAggregationMode.All => matches.Count == materialized.Count,
+                _ => matches.Count > 0
+            };
+
+            return (Item: item, Include: include);
+        }));
+
+        return evaluations
+            .Where(result => result.Include)
+            .Select(result => result.Item)
+            .ToList();
+    }
+
+
+    private List<MondayItemDto> ApplyActivityLogFilter(
+        List<MondayItemDto> items,
+        Func<IEnumerable<MondayActivityLogDto>, bool> activityPredicate,
+        IReadOnlyDictionary<string, IReadOnlyList<MondayActivityLogDto>>? activityLogLookup)
+    {
+        if (items.Count == 0)
+        {
+            return items;
+        }
+
+        return items
+            .Where(item =>
+            {
+                var logs = activityLogLookup is not null && activityLogLookup.TryGetValue(item.Id, out var itemLogs)
+                    ? itemLogs
+                    : Array.Empty<MondayActivityLogDto>();
+
+                return activityPredicate(logs);
+            })
+            .ToList();
+    }
+    private async Task<List<MondayItemDto>> ApplyUpdateFilterAsync(
+        List<MondayItemDto> parentItems,
+        Func<IEnumerable<MondayUpdateDto>, bool> updatePredicate,
+        CancellationToken cancellationToken)
+    {
+        if (parentItems.Count == 0)
+        {
+            return parentItems;
+        }
+
+        var evaluations = await Task.WhenAll(parentItems.Select(async item =>
+        {
+            var updates = await GetItemUpdatesAsync(item.Id, null, null, cancellationToken);
+            var materialized = updates as IList<MondayUpdateDto> ?? updates.ToList();
+            var include = updatePredicate(materialized);
             return (Item: item, Include: include);
         }));
 
@@ -485,12 +610,15 @@ public class MondayApiClient : IMondayApiClient
     {
         JsonElement jsonLog = (JsonElement)log;
 
+        var dataString = jsonLog.TryGetProperty("data", out var data) ? data.GetString() ?? "{}" : "{}";
+
         return new MondayActivityLogDto
         {
             EventType = jsonLog.TryGetProperty("event", out var evt) ? evt.GetString() ?? "" : "",
             UserId = jsonLog.TryGetProperty("user_id", out var userId) ? userId.GetString() ?? "" : "",
+            ItemId = TryExtractActivityItemId(dataString),
             CreatedAt = jsonLog.TryGetProperty("created_at", out var createdAt) ? ParseDateTimeOffset(createdAt.GetString()) : DateTimeOffset.UtcNow,
-            EventDataJson = jsonLog.TryGetProperty("data", out var data) ? data.GetString() ?? "{}" : "{}"
+            EventDataJson = dataString
         };
     }
 
@@ -722,23 +850,68 @@ public class MondayApiClient : IMondayApiClient
             Type = jsonColumn.TryGetProperty("type", out var typeProp) ? typeProp.GetString() ?? "" : ""
         };
     }
+    private static string? TryExtractActivityItemId(string? data)
+    {
+        if (string.IsNullOrWhiteSpace(data) || data == "{}")
+        {
+            return null;
+        }
+
+        try
+        {
+            using var doc = JsonDocument.Parse(data);
+            var root = doc.RootElement;
+
+            if (TryGetString(root, "item_id", out var itemId) ||
+                TryGetString(root, "itemId", out itemId) ||
+                TryGetString(root, "pulseId", out itemId) ||
+                TryGetString(root, "entity_id", out itemId) ||
+                TryGetString(root, "entityId", out itemId))
+            {
+                return itemId;
+            }
+
+            if (root.TryGetProperty("entity", out var entity) &&
+                (TryGetString(entity, "id", out itemId) ||
+                 TryGetString(entity, "item_id", out itemId)))
+            {
+                return itemId;
+            }
+
+            if (root.TryGetProperty("item", out var itemElement) &&
+                TryGetString(itemElement, "id", out itemId))
+            {
+                return itemId;
+            }
+        }
+        catch (JsonException)
+        {
+            // Ignore malformed data payloads
+        }
+
+        return null;
+    }
+
+    private static bool TryGetString(JsonElement element, string propertyName, out string? value)
+    {
+        if (element.ValueKind == JsonValueKind.Object && element.TryGetProperty(propertyName, out var property))
+        {
+            switch (property.ValueKind)
+            {
+                case JsonValueKind.String:
+                    value = property.GetString();
+                    return !string.IsNullOrWhiteSpace(value);
+                case JsonValueKind.Number when property.TryGetInt64(out var number):
+                    value = number.ToString();
+                    return true;
+            }
+        }
+
+        value = null;
+        return false;
+    }
+
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
