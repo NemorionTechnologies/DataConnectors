@@ -13,7 +13,7 @@ public static class MondayFilterDefinitionFixtures
     {
         var statusColumnId = await ResolveColumnIdAsync(config.BoardId, config.StatusColumnTitle, columnResolver, cancellationToken);
         var linkColumnId = await ResolveColumnIdAsync(config.BoardId, config.LinkColumnTitle, columnResolver, cancellationToken);
-        var statusLabel = string.IsNullOrWhiteSpace(config.StatusLabel) ? "Working on it" : config.StatusLabel;
+        var statusLabel = string.IsNullOrWhiteSpace(config.StatusLabel) ? "In Progress" : config.StatusLabel;
 
         var cases = new List<FilterDefinitionCase>
         {

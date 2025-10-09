@@ -1,5 +1,7 @@
 using DataWorkflows.Engine.Core.Application;
 using DataWorkflows.Engine.Core.Interfaces;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -17,6 +19,15 @@ builder.Services.AddScoped<IWorkflowOrchestrator, WorkflowOrchestrator>();
 // Add HTTP client for calling connector services
 builder.Services.AddHttpClient();
 
+// Add health checks
+builder.Services.AddHealthChecks()
+      .AddCheck("self", () => HealthCheckResult.Healthy(), tags: new[] { "live" })
+      .AddNpgSql(
+          connectionString: builder.Configuration.GetConnectionString("Postgres")!,
+          name: "postgres",
+          tags: new[] { "ready" }
+      );
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline
@@ -29,5 +40,14 @@ if (app.Environment.IsDevelopment())
 app.UseHttpsRedirection();
 app.UseAuthorization();
 app.MapControllers();
+
+// Map health check endpoints
+app.MapHealthChecks("/health/live", new HealthCheckOptions {
+    Predicate = check => check.Tags.Contains("live")
+});
+
+// app.MapHealthChecks("/health/ready", new HealthCheckOptions {
+//     Predicate = check => check.Tags.Contains("ready")
+// });
 
 app.Run();

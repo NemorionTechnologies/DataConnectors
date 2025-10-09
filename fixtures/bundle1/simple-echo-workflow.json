@@ -1,0 +1,21 @@
+{
+  "id": "simple-echo",
+  "displayName": "Simple Echo Workflow",
+  "startNode": "echo1",
+  "nodes": [
+    {
+      "id": "echo1",
+      "actionType": "core.echo",
+      "parameters": {
+        "message": "Hello from node 1"
+      }
+    },
+    {
+      "id": "echo2",
+      "actionType": "core.echo",
+      "parameters": {
+        "message": "Hello from node 2"
+      }
+    }
+  ]
+}

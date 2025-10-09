@@ -7,9 +7,11 @@ FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
 WORKDIR /src
 COPY ["src/DataWorkflows.Engine/DataWorkflows.Engine.csproj", "DataWorkflows.Engine/"]
 COPY ["src/DataWorkflows.Contracts/DataWorkflows.Contracts.csproj", "DataWorkflows.Contracts/"]
+COPY ["src/DataWorkflows.Data/DataWorkflows.Data.csproj", "DataWorkflows.Data/"]
 RUN dotnet restore "DataWorkflows.Engine/DataWorkflows.Engine.csproj"
 COPY src/DataWorkflows.Engine/. DataWorkflows.Engine/
 COPY src/DataWorkflows.Contracts/. DataWorkflows.Contracts/
+COPY src/DataWorkflows.Data/. DataWorkflows.Data/
 WORKDIR "/src/DataWorkflows.Engine"
 RUN dotnet build "DataWorkflows.Engine.csproj" -c Release -o /app/build
 
