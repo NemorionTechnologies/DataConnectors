@@ -1,0 +1,22 @@
+{
+  "id": "retry-test",
+  "displayName": "Retry Test Workflow",
+  "startNode": "transient-fail",
+  "nodes": [
+    {
+      "id": "transient-fail",
+      "actionType": "core.echo",
+      "parameters": {
+        "message": "Will succeed after retries",
+        "simulateFailure": "transient"
+      }
+    },
+    {
+      "id": "success",
+      "actionType": "core.echo",
+      "parameters": {
+        "message": "Success after retry"
+      }
+    }
+  ]
+}

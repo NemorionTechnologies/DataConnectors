@@ -1,0 +1,34 @@
+{
+  "id": "conditional",
+  "displayName": "Conditional Branching Test",
+  "startNode": "check",
+  "nodes": [
+    {
+      "id": "check",
+      "actionType": "core.echo",
+      "parameters": { "message": "Checking..." },
+      "edges": [
+        {
+          "targetNode": "approved",
+          "when": "success",
+          "condition": "trigger.status === 'approved'"
+        },
+        {
+          "targetNode": "rejected",
+          "when": "success",
+          "condition": "trigger.status !== 'approved'"
+        }
+      ]
+    },
+    {
+      "id": "approved",
+      "actionType": "core.echo",
+      "parameters": { "message": "Approved!" }
+    },
+    {
+      "id": "rejected",
+      "actionType": "core.echo",
+      "parameters": { "message": "Rejected!" }
+    }
+  ]
+}

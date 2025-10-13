@@ -30,6 +30,41 @@ public class WorkflowExecutionRepository
         });
     }
 
+    public async Task MarkExecutionRunning(Guid executionId, DateTime startTime)
+    {
+        using var conn = new NpgsqlConnection(_connectionString);
+        var sql = @"
+            UPDATE WorkflowExecutions
+               SET Status = 'Running',
+                   StartTime = COALESCE(StartTime, @StartTime)
+             WHERE Id = @ExecutionId";
+
+        await conn.ExecuteAsync(sql, new
+        {
+            ExecutionId = executionId,
+            StartTime = startTime
+        });
+    }
+
+    public async Task CompleteExecution(Guid executionId, string status, DateTime endTime, string contextSnapshotJson)
+    {
+        using var conn = new NpgsqlConnection(_connectionString);
+        var sql = @"
+            UPDATE WorkflowExecutions
+               SET Status = @Status,
+                   EndTime = @EndTime,
+                   ContextSnapshotJson = @ContextSnapshot::jsonb
+             WHERE Id = @ExecutionId";
+
+        await conn.ExecuteAsync(sql, new
+        {
+            ExecutionId = executionId,
+            Status = status,
+            EndTime = endTime,
+            ContextSnapshot = contextSnapshotJson
+        });
+    }
+
     public async Task<WorkflowExecution?> GetById(Guid id)
     {
         using var conn = new NpgsqlConnection(_connectionString);
@@ -47,5 +82,6 @@ public record WorkflowExecution(
     string TriggerPayloadJson,
     DateTime? StartTime,
     DateTime? EndTime,
-    string? CorrelationId
+    string? CorrelationId,
+    string? ContextSnapshotJson
 );

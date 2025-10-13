@@ -23,6 +23,7 @@ obj/
 
 ## Docker
 docker-compose.override.yml
+.docker/
 
 ## OS
 .DS_Store

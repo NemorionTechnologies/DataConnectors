@@ -17,15 +17,38 @@ public class ActionExecutionRepository
         string nodeId,
         string actionType,
         string status,
+        int attempt,
+        int retryCount,
         string? outputs,
+        string? error,
         DateTime startTime,
         DateTime endTime
     )
     {
         using var conn = new NpgsqlConnection(_connectionString);
         var sql = @"
-            INSERT INTO ActionExecutions (WorkflowExecutionId, NodeId, ActionType, Status, OutputsJson, StartTime, EndTime)
-            VALUES (@ExecutionId, @NodeId, @ActionType, @Status, @Outputs::jsonb, @StartTime, @EndTime)";
+            INSERT INTO ActionExecutions (
+                WorkflowExecutionId,
+                NodeId,
+                ActionType,
+                Status,
+                Attempt,
+                RetryCount,
+                OutputsJson,
+                ErrorJson,
+                StartTime,
+                EndTime)
+            VALUES (
+                @ExecutionId,
+                @NodeId,
+                @ActionType,
+                @Status,
+                @Attempt,
+                @RetryCount,
+                @Outputs::jsonb,
+                @Error::jsonb,
+                @StartTime,
+                @EndTime)";
 
         await conn.ExecuteAsync(sql, new
         {
@@ -33,7 +56,10 @@ public class ActionExecutionRepository
             NodeId = nodeId,
             ActionType = actionType,
             Status = status,
+            Attempt = attempt,
+            RetryCount = retryCount,
             Outputs = outputs,
+            Error = error,
             StartTime = startTime,
             EndTime = endTime
         });

@@ -1,3 +1,7 @@
+using System;
+using System.Collections.Generic;
+using System.Threading.Tasks;
+using DataWorkflows.Engine.Configuration;
 using Microsoft.AspNetCore.Mvc;
 using DataWorkflows.Engine.Models;
 using DataWorkflows.Engine.Parsing;
@@ -18,31 +22,29 @@ public class ExecuteController : ControllerBase
     }
 
     [HttpPost("{workflowId}/execute")]
-    public async Task<IActionResult> Execute(string workflowId, [FromBody] ExecuteRequest request)
+    public async Task<IActionResult> Execute(string workflowId,
+    [FromBody] ExecuteRequest request,
+    [FromQuery] string? fixture = null,
+    [FromServices] IWebHostEnvironment env = null!)
     {
-        // Hardcoded workflow for Bundle 1 (Bundle 7 will use DB)
-        var workflowJson = """
-        {
-          "id": "test",
-          "displayName": "Test Workflow",
-          "startNode": "echo1",
-          "nodes": [
-            { "id": "echo1", "actionType": "core.echo", "parameters": { "message": "Hello" } },
-            { "id": "echo2", "actionType": "core.echo", "parameters": { "message": "World" } }
-          ]
-        }
-        """;
+        // Pick a fixture: ?fixture=fixtures/bundle3/fanout-fanin-workflow.json
+        // or default per-bundle (keep your existing test id)
+        var relPath = fixture ?? "fixtures/bundle1/simple-echo-workflow.json";
+        var fullPath = Path.Combine(env.ContentRootPath, relPath);
+
+        var workflowJson = System.IO.File.ReadAllText(fullPath); // <-- replaces hardcoded JSON
 
         var parser = new WorkflowParser();
         var workflow = parser.Parse(workflowJson);
 
         var connectionString = _config.GetConnectionString("Postgres")!;
-        var conductor = new WorkflowConductor(new ActionRegistry());
+        var orchestrationOptions = OrchestrationOptions.FromConfiguration(_config);
+        var conductor = new WorkflowConductor(new ActionRegistry(), orchestrationOptions);
 
         // Controller only handles HTTP concerns - Conductor owns execution lifecycle
         var result = await conductor.ExecuteAsync(
             workflow,
-            request.Trigger ?? new(),
+            request.Trigger ?? new Dictionary<string, object>(),
             requestId: Guid.NewGuid().ToString(),
             connectionString
         );

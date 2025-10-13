@@ -1,0 +1,37 @@
+{
+  "id": "fanout-fanin",
+  "displayName": "Fan-out/Fan-in Test",
+  "startNode": "start",
+  "nodes": [
+    {
+      "id": "start",
+      "actionType": "core.echo",
+      "parameters": { "message": "Start" },
+      "edges": [
+        { "targetNode": "branch-a", "when": "success" },
+        { "targetNode": "branch-b", "when": "success" }
+      ]
+    },
+    {
+      "id": "branch-a",
+      "actionType": "core.echo",
+      "parameters": { "message": "Branch A" },
+      "edges": [
+        { "targetNode": "join", "when": "success" }
+      ]
+    },
+    {
+      "id": "branch-b",
+      "actionType": "core.echo",
+      "parameters": { "message": "Branch B" },
+      "edges": [
+        { "targetNode": "join", "when": "success" }
+      ]
+    },
+    {
+      "id": "join",
+      "actionType": "core.echo",
+      "parameters": { "message": "Joined!" }
+    }
+  ]
+}

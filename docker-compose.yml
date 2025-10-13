@@ -40,7 +40,7 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ASPNETCORE_URLS=http://+:80
-      - ConnectionStrings__Postgres=Host=postgres;Port=5432;Database=dataworkflows;Username=postgres;Password=YOUR_POSTGRES_PASSWORD_HERE
+      - ConnectionStrings__Postgres=Host=postgres;Port=5432;Database=dataworkflows;Username=postgres;Password=postgres
     ports:
       - "5001:80"
     depends_on:

@@ -1032,7 +1032,7 @@ curl -X POST http://localhost:5131/api/v1/workflows/test/execute \
 
 **Commit:**
 ```bash
-git commit -am "Bundle 2: Add retry logic and error handling ✅
+git commit -am "Bundle 2: Add retry logic and error handling
 
 - Polly retry policy (3 attempts, exponential backoff)
 - RetriableFailure vs Failed status handling
@@ -1042,7 +1042,7 @@ git commit -am "Bundle 2: Add retry logic and error handling ✅
 
 ---
 
-### Bundle 3: Branching & Conditions 🌳
+### Bundle 3: Branching & Conditions
 
 **Goal**: Add Jint condition evaluation, edge routing, superset graph validation, join nodes, and parallel execution.
 

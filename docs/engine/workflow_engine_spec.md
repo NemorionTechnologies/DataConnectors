@@ -2116,7 +2116,8 @@ POST /api/v1/workflows/create-project-brief/execute
 
 ### 19.1 Migration Tooling
 
-* **FluentMigrator** or **EF Core Migrations**
+* **FluentMigrator**
+  * _Note: EF Core Migrations is not supported for this project due to its limited support for advanced PostgreSQL features, lack of idempotent migration scripts, and less control over migration ordering. FluentMigrator provides better compatibility and operational safety for complex, production-grade schema management._
 * `schema_version` table tracks applied migrations
 * Each migration tagged with timestamp + description
 

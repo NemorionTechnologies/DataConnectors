@@ -1,0 +1,5 @@
+ALTER TABLE ActionExecutions
+  ADD COLUMN IF NOT EXISTS RetryCount INT NOT NULL DEFAULT 0;
+
+ALTER TABLE WorkflowExecutions
+  ADD COLUMN IF NOT EXISTS ContextSnapshotJson JSONB NULL;
