@@ -19,6 +19,7 @@ public class ActionExecutionRepository
         string status,
         int attempt,
         int retryCount,
+        string? parameters,
         string? outputs,
         string? error,
         DateTime startTime,
@@ -34,6 +35,7 @@ public class ActionExecutionRepository
                 Status,
                 Attempt,
                 RetryCount,
+                ParametersJson,
                 OutputsJson,
                 ErrorJson,
                 StartTime,
@@ -45,6 +47,7 @@ public class ActionExecutionRepository
                 @Status,
                 @Attempt,
                 @RetryCount,
+                @Parameters::jsonb,
                 @Outputs::jsonb,
                 @Error::jsonb,
                 @StartTime,
@@ -58,10 +61,24 @@ public class ActionExecutionRepository
             Status = status,
             Attempt = attempt,
             RetryCount = retryCount,
+            Parameters = parameters,
             Outputs = outputs,
             Error = error,
             StartTime = startTime,
             EndTime = endTime
         });
+    }
+
+    public async Task<string?> GetFirstAttemptParameters(Guid executionId, string nodeId)
+    {
+        using var conn = new NpgsqlConnection(_connectionString);
+        var sql = @"
+            SELECT ParametersJson::text
+              FROM ActionExecutions
+             WHERE WorkflowExecutionId = @ExecutionId AND NodeId = @NodeId
+             ORDER BY Attempt ASC
+             LIMIT 1";
+
+        return await conn.ExecuteScalarAsync<string?>(sql, new { ExecutionId = executionId, NodeId = nodeId });
     }
 }

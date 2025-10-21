@@ -1,0 +1,3 @@
+ALTER TABLE ActionExecutions
+  ADD COLUMN IF NOT EXISTS ParametersJson JSONB NULL;
+

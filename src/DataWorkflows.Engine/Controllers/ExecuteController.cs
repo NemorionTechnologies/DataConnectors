@@ -7,6 +7,7 @@ using DataWorkflows.Engine.Models;
 using DataWorkflows.Engine.Parsing;
 using DataWorkflows.Engine.Orchestration;
 using DataWorkflows.Engine.Registry;
+using DataWorkflows.Engine.Templating;
 
 namespace DataWorkflows.Engine.Controllers;
 
@@ -15,10 +16,12 @@ namespace DataWorkflows.Engine.Controllers;
 public class ExecuteController : ControllerBase
 {
     private readonly IConfiguration _config;
+    private readonly WorkflowConductor _conductor;
 
-    public ExecuteController(IConfiguration config)
+    public ExecuteController(IConfiguration config, WorkflowConductor conductor)
     {
         _config = config;
+        _conductor = conductor;
     }
 
     [HttpPost("{workflowId}/execute")]
@@ -38,13 +41,11 @@ public class ExecuteController : ControllerBase
         var workflow = parser.Parse(workflowJson);
 
         var connectionString = _config.GetConnectionString("Postgres")!;
-        var orchestrationOptions = OrchestrationOptions.FromConfiguration(_config);
-        var conductor = new WorkflowConductor(new ActionRegistry(), orchestrationOptions);
-
         // Controller only handles HTTP concerns - Conductor owns execution lifecycle
-        var result = await conductor.ExecuteAsync(
+        var result = await _conductor.ExecuteAsync(
             workflow,
             request.Trigger ?? new Dictionary<string, object>(),
+            request.Vars ?? new Dictionary<string, object>(),
             requestId: Guid.NewGuid().ToString(),
             connectionString
         );

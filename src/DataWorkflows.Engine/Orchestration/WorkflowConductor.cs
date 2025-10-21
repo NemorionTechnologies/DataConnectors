@@ -14,6 +14,8 @@ using DataWorkflows.Engine.Execution;
 using DataWorkflows.Engine.Models;
 using DataWorkflows.Engine.Registry;
 using DataWorkflows.Engine.Validation;
+using DataWorkflows.Engine.Templating;
+using Microsoft.Extensions.Logging;
 
 namespace DataWorkflows.Engine.Orchestration;
 
@@ -24,16 +26,23 @@ public class WorkflowConductor
 
     private readonly ActionRegistry _registry;
     private readonly OrchestrationOptions _options;
+    private readonly ITemplateEngine _templateEngine;
+    private readonly IParameterValidator _parameterValidator;
+    private readonly ILogger<WorkflowConductor> _logger;
 
-    public WorkflowConductor(ActionRegistry registry, OrchestrationOptions options)
+    public WorkflowConductor(ActionRegistry registry, OrchestrationOptions options, ITemplateEngine templateEngine, IParameterValidator parameterValidator, ILogger<WorkflowConductor> logger)
     {
         _registry = registry;
         _options = options;
+        _templateEngine = templateEngine;
+        _parameterValidator = parameterValidator;
+        _logger = logger;
     }
 
     public async Task<ExecutionResult> ExecuteAsync(
         WorkflowDefinition workflow,
         Dictionary<string, object> trigger,
+        Dictionary<string, object>? vars,
         string requestId,
         string connectionString)
     {
@@ -45,7 +54,7 @@ public class WorkflowConductor
         using var workflowCts = new CancellationTokenSource(_options.DefaultWorkflowTimeout);
 
         var triggerModel = CreateReadOnlyDictionary(trigger);
-        var varsModel = EmptyReadOnlyDictionary;
+        var varsModel = vars is null ? EmptyReadOnlyDictionary : new ReadOnlyDictionary<string, object?>(vars.ToDictionary(kv => kv.Key, kv => (object?)kv.Value));
 
         Guid executionId = Guid.Empty;
         var workflowStatus = "Failed";
@@ -169,10 +178,10 @@ public class WorkflowConductor
                     node,
                     context,
                     actionRepo,
-                    evaluator,
-                    triggerModel,
-                    varsModel,
-                    runQueue,
+                evaluator,
+                triggerModel,
+                varsModel,
+                runQueue,
                     enqueuedNodes,
                     completedNodes,
                     incomingEdgeStates,
@@ -257,6 +266,8 @@ public class WorkflowConductor
             node,
             context,
             actionRepo,
+            triggerModel,
+            varsModel,
             semaphore,
             workflowCts);
 
@@ -307,16 +318,13 @@ public class WorkflowConductor
         Node node,
         WorkflowContext context,
         ActionExecutionRepository actionRepo,
+        IReadOnlyDictionary<string, object?> triggerModel,
+        IReadOnlyDictionary<string, object?> varsModel,
         SemaphoreSlim semaphore,
         CancellationTokenSource workflowCts)
     {
         var action = _registry.GetAction(node.ActionType);
-        var parameters = NormalizeParameters(node.Parameters);
-        var actionContext = new ActionExecutionContext(
-            WorkflowExecutionId: executionId,
-            NodeId: node.Id,
-            Parameters: parameters,
-            Services: null!);
+        var policies = node.Policies ?? new NodePolicies(false);
 
         var attemptNumber = 1;
         var maxAttempts = Math.Max(1, _options.RetryPolicy.MaxAttempts);
@@ -325,6 +333,8 @@ public class WorkflowConductor
         {
             ActionExecutionResult attemptResult;
             var attemptStart = DateTime.UtcNow;
+            string? parametersJson = null;
+            Dictionary<string, object?>? renderedParameters = null;
 
             try
             {
@@ -342,6 +352,41 @@ public class WorkflowConductor
 
                 try
                 {
+                    // Render parameters per policies
+                    var shouldRerender = policies.RerenderOnRetry;
+                    var sw = System.Diagnostics.Stopwatch.StartNew();
+                    if (attemptNumber == 1 || shouldRerender)
+                    {
+                        parametersJson = await RenderParametersJsonAsync(node, triggerModel, context, varsModel, actionCts.Token);
+                    }
+                    else
+                    {
+                        // Reuse first attempt's persisted parameters
+                        parametersJson = await actionRepo.GetFirstAttemptParameters(executionId, node.Id);
+                        if (string.IsNullOrWhiteSpace(parametersJson))
+                        {
+                            // Fallback: render if not found (should not happen normally)
+                            parametersJson = await RenderParametersJsonAsync(node, triggerModel, context, varsModel, actionCts.Token);
+                        }
+                    }
+                    sw.Stop();
+                    _logger.LogInformation("Rendered parameters {ExecutionId} {NodeId} attempt={Attempt} duration_ms={DurationMs}", executionId, node.Id, attemptNumber, sw.ElapsedMilliseconds);
+
+                    renderedParameters = DeserializeParameters(parametersJson!);
+
+                    // Validate rendered parameters
+                    var validation = _parameterValidator.Validate(node.ActionType, renderedParameters);
+                    if (!validation.IsValid)
+                    {
+                        throw new InvalidOperationException($"Parameter validation failed: {validation.ErrorMessage}");
+                    }
+
+                    var actionContext = new ActionExecutionContext(
+                        WorkflowExecutionId: executionId,
+                        NodeId: node.Id,
+                        Parameters: renderedParameters,
+                        Services: null!);
+
                     attemptResult = await action.ExecuteAsync(actionContext, actionCts.Token);
                 }
                 catch (OperationCanceledException) when (!workflowCts.IsCancellationRequested)
@@ -353,8 +398,12 @@ public class WorkflowConductor
                 }
                 catch (Exception ex)
                 {
+                    // Map template/validation errors to RetriableFailure if attempts remain; else Failed
+                    var canRetry = attemptNumber < Math.Max(1, _options.RetryPolicy.MaxAttempts);
+                    var status = canRetry ? ActionExecutionStatus.RetriableFailure : ActionExecutionStatus.Failed;
+                    _logger.LogWarning(ex, "Template/validation error {ExecutionId} {NodeId} attempt={Attempt} template_error=true", executionId, node.Id, attemptNumber);
                     attemptResult = new ActionExecutionResult(
-                        ActionExecutionStatus.Failed,
+                        status,
                         new Dictionary<string, object?>(),
                         ex.Message);
                 }
@@ -385,6 +434,7 @@ public class WorkflowConductor
                 attemptResult.Status.ToString(),
                 attemptNumber,
                 retryCount: Math.Max(0, attemptNumber - 1),
+                parameters: parametersJson,
                 outputsJson,
                 errorJson,
                 attemptStart,
@@ -419,6 +469,71 @@ public class WorkflowConductor
         }
 
         return ActionExecutionStatus.Skipped;
+    }
+
+    private async Task<string> RenderParametersJsonAsync(
+        Node node,
+        IReadOnlyDictionary<string, object?> triggerModel,
+        WorkflowContext context,
+        IReadOnlyDictionary<string, object?> varsModel,
+        CancellationToken ct)
+    {
+        var parameters = NormalizeParameters(node.Parameters);
+        var templateJson = JsonSerializer.Serialize(parameters);
+        // Build model: { trigger, context: { data = ... }, vars }
+        var contextSnapshot = CreateReadOnlyDictionaryFromOutputs(context.GetAllOutputs());
+        var model = new
+        {
+            trigger = triggerModel,
+            context = new { data = (object)contextSnapshot },
+            vars = varsModel
+        };
+
+        return await _templateEngine.RenderAsync(templateJson, model, ct);
+    }
+
+    private static Dictionary<string, object?> DeserializeParameters(string json)
+    {
+        if (string.IsNullOrWhiteSpace(json)) return new Dictionary<string, object?>();
+        var doc = JsonDocument.Parse(json);
+        if (doc.RootElement.ValueKind != JsonValueKind.Object)
+        {
+            throw new InvalidOperationException("Rendered parameters must be a JSON object");
+        }
+
+        var dict = new Dictionary<string, object?>();
+        foreach (var prop in doc.RootElement.EnumerateObject())
+        {
+            dict[prop.Name] = JsonElementToObject(prop.Value);
+        }
+        return dict;
+    }
+
+    private static object? JsonElementToObject(JsonElement el)
+    {
+        switch (el.ValueKind)
+        {
+            case JsonValueKind.Object:
+                var obj = new Dictionary<string, object?>();
+                foreach (var p in el.EnumerateObject()) obj[p.Name] = JsonElementToObject(p.Value);
+                return obj;
+            case JsonValueKind.Array:
+                return el.EnumerateArray().Select(JsonElementToObject).ToList();
+            case JsonValueKind.String:
+                return el.GetString();
+            case JsonValueKind.Number:
+                if (el.TryGetInt64(out var l)) return l;
+                if (el.TryGetDouble(out var d)) return d;
+                return el.GetRawText();
+            case JsonValueKind.True:
+                return true;
+            case JsonValueKind.False:
+                return false;
+            case JsonValueKind.Null:
+            case JsonValueKind.Undefined:
+            default:
+                return null;
+        }
     }
 
     private static Dictionary<string, ConcurrentDictionary<string, EdgeOutcome>> BuildIncomingEdgeState(WorkflowDefinition workflow)

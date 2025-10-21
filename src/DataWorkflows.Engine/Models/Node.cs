@@ -7,5 +7,10 @@ public sealed record Node(
     string ActionType,
     Dictionary<string, object>? Parameters = null,
     List<Edge>? Edges = null,
-    string RoutePolicy = "parallel"
+    string RoutePolicy = "parallel",
+    NodePolicies? Policies = null
+);
+
+public sealed record NodePolicies(
+    bool RerenderOnRetry = false
 );

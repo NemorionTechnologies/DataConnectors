@@ -54,7 +54,8 @@ public sealed class JintConditionEvaluator
             });
 
             engine.SetValue("trigger", scope.Trigger);
-            engine.SetValue("context", scope.Context);
+            // Standardize to context.data shape for conditions
+            engine.SetValue("context", new { data = scope.Context });
             engine.SetValue("vars", scope.Vars);
 
             var result = engine.Evaluate(condition);
