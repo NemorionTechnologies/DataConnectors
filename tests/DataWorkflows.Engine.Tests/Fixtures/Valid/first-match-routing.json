@@ -1,0 +1,52 @@
+{
+  "id": "first-match-routing",
+  "displayName": "First Match Routing Policy",
+  "startNode": "check-priority",
+  "nodes": [
+    {
+      "id": "check-priority",
+      "actionType": "core.echo",
+      "parameters": {
+        "message": "Checking priority"
+      },
+      "routePolicy": "firstMatch",
+      "edges": [
+        {
+          "targetNode": "high-priority",
+          "when": "success",
+          "condition": "trigger.priority === 'high'"
+        },
+        {
+          "targetNode": "medium-priority",
+          "when": "success",
+          "condition": "trigger.priority === 'medium'"
+        },
+        {
+          "targetNode": "low-priority",
+          "when": "success"
+        }
+      ]
+    },
+    {
+      "id": "high-priority",
+      "actionType": "core.echo",
+      "parameters": {
+        "message": "High priority processing"
+      }
+    },
+    {
+      "id": "medium-priority",
+      "actionType": "core.echo",
+      "parameters": {
+        "message": "Medium priority processing"
+      }
+    },
+    {
+      "id": "low-priority",
+      "actionType": "core.echo",
+      "parameters": {
+        "message": "Low priority processing"
+      }
+    }
+  ]
+}

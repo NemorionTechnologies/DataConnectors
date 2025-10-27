@@ -1,0 +1,25 @@
+{
+  "id": "templating-test",
+  "displayName": "Templating Trigger + Context",
+  "startNode": "echo1",
+  "nodes": [
+    {
+      "id": "echo1",
+      "actionType": "core.echo",
+      "parameters": {
+        "message": "User {{ trigger.userId }} at {{ trigger.timestamp }}"
+      },
+      "edges": [
+        { "targetNode": "echo2", "when": "success" }
+      ]
+    },
+    {
+      "id": "echo2",
+      "actionType": "core.echo",
+      "parameters": {
+        "message": "Prev: {{ context.data['echo1'].echo }}"
+      }
+    }
+  ]
+}
+

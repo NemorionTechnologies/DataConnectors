@@ -1,0 +1,18 @@
+{
+  "id": "rerender-on-retry",
+  "displayName": "Rerender On Retry",
+  "startNode": "unstable",
+  "nodes": [
+    {
+      "id": "unstable",
+      "actionType": "core.echo",
+      "parameters": {
+        "message": "Attempt at {{ trigger.timestamp }}"
+      },
+      "policies": {
+        "rerenderOnRetry": true
+      }
+    }
+  ]
+}
+

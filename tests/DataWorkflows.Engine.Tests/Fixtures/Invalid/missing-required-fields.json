@@ -1,0 +1,12 @@
+{
+  "displayName": "Missing Required ID and StartNode",
+  "nodes": [
+    {
+      "id": "step1",
+      "actionType": "core.echo",
+      "parameters": {
+        "message": "Missing workflow id"
+      }
+    }
+  ]
+}

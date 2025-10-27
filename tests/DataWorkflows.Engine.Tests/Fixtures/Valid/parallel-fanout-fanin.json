@@ -1,0 +1,74 @@
+{
+  "id": "parallel-fanout-fanin",
+  "displayName": "Parallel Fan-out Fan-in",
+  "startNode": "start",
+  "nodes": [
+    {
+      "id": "start",
+      "actionType": "core.echo",
+      "parameters": {
+        "message": "Starting parallel execution"
+      },
+      "edges": [
+        {
+          "targetNode": "parallel-a",
+          "when": "success"
+        },
+        {
+          "targetNode": "parallel-b",
+          "when": "success"
+        },
+        {
+          "targetNode": "parallel-c",
+          "when": "success"
+        }
+      ]
+    },
+    {
+      "id": "parallel-a",
+      "actionType": "core.echo",
+      "parameters": {
+        "message": "Branch A"
+      },
+      "edges": [
+        {
+          "targetNode": "join",
+          "when": "success"
+        }
+      ]
+    },
+    {
+      "id": "parallel-b",
+      "actionType": "core.echo",
+      "parameters": {
+        "message": "Branch B"
+      },
+      "edges": [
+        {
+          "targetNode": "join",
+          "when": "success"
+        }
+      ]
+    },
+    {
+      "id": "parallel-c",
+      "actionType": "core.echo",
+      "parameters": {
+        "message": "Branch C"
+      },
+      "edges": [
+        {
+          "targetNode": "join",
+          "when": "success"
+        }
+      ]
+    },
+    {
+      "id": "join",
+      "actionType": "core.echo",
+      "parameters": {
+        "message": "All branches completed"
+      }
+    }
+  ]
+}

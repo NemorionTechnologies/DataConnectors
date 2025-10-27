@@ -1,0 +1,6 @@
+{
+  "id": "empty-nodes",
+  "displayName": "Empty Nodes Array",
+  "startNode": "step1",
+  "nodes": []
+}

@@ -1,0 +1,23 @@
+{
+  "id": "deep-nesting",
+  "displayName": "Deep Parameter Nesting",
+  "startNode": "nested-params",
+  "nodes": [
+    {
+      "id": "nested-params",
+      "actionType": "core.echo",
+      "parameters": {
+        "message": "{{ trigger.data.user.profile.settings.notifications.email.enabled }}",
+        "nested": {
+          "level1": {
+            "level2": {
+              "level3": {
+                "value": "deeply nested"
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,46 @@
+{
+  "id": "cyclic-graph",
+  "displayName": "Cyclic Graph (Invalid DAG)",
+  "startNode": "node-a",
+  "nodes": [
+    {
+      "id": "node-a",
+      "actionType": "core.echo",
+      "parameters": {
+        "message": "Node A"
+      },
+      "edges": [
+        {
+          "targetNode": "node-b",
+          "when": "success"
+        }
+      ]
+    },
+    {
+      "id": "node-b",
+      "actionType": "core.echo",
+      "parameters": {
+        "message": "Node B"
+      },
+      "edges": [
+        {
+          "targetNode": "node-c",
+          "when": "success"
+        }
+      ]
+    },
+    {
+      "id": "node-c",
+      "actionType": "core.echo",
+      "parameters": {
+        "message": "Node C"
+      },
+      "edges": [
+        {
+          "targetNode": "node-a",
+          "when": "success"
+        }
+      ]
+    }
+  ]
+}

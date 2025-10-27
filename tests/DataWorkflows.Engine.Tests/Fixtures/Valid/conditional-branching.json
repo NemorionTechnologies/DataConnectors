@@ -1,0 +1,52 @@
+{
+  "id": "conditional-branching",
+  "displayName": "Conditional Branching",
+  "startNode": "check-status",
+  "nodes": [
+    {
+      "id": "check-status",
+      "actionType": "core.echo",
+      "parameters": {
+        "message": "Checking status"
+      },
+      "edges": [
+        {
+          "targetNode": "approved-path",
+          "when": "success",
+          "condition": "trigger.status === 'approved'"
+        },
+        {
+          "targetNode": "rejected-path",
+          "when": "success",
+          "condition": "trigger.status === 'rejected'"
+        },
+        {
+          "targetNode": "pending-path",
+          "when": "success",
+          "condition": "trigger.status === 'pending'"
+        }
+      ]
+    },
+    {
+      "id": "approved-path",
+      "actionType": "core.echo",
+      "parameters": {
+        "message": "Processing approved request"
+      }
+    },
+    {
+      "id": "rejected-path",
+      "actionType": "core.echo",
+      "parameters": {
+        "message": "Processing rejected request"
+      }
+    },
+    {
+      "id": "pending-path",
+      "actionType": "core.echo",
+      "parameters": {
+        "message": "Request still pending"
+      }
+    }
+  ]
+}
