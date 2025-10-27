@@ -1,0 +1,18 @@
+{
+  "id": "rerender-on-retry",
+  "displayName": "Rerender Parameters On Retry",
+  "startNode": "timestamp-action",
+  "nodes": [
+    {
+      "id": "timestamp-action",
+      "actionType": "core.echo",
+      "parameters": {
+        "message": "Attempt at {{ trigger.timestamp }}",
+        "attemptNumber": "{{ vars.attemptNumber }}"
+      },
+      "policies": {
+        "rerenderOnRetry": true
+      }
+    }
+  ]
+}

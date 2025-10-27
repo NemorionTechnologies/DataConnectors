@@ -1,0 +1,40 @@
+{
+  "id": "template-trigger-context",
+  "displayName": "Template Using Trigger and Context",
+  "startNode": "greet-user",
+  "nodes": [
+    {
+      "id": "greet-user",
+      "actionType": "core.echo",
+      "parameters": {
+        "message": "Hello {{ trigger.username }}, request ID: {{ trigger.requestId }}"
+      },
+      "edges": [
+        {
+          "targetNode": "process-data",
+          "when": "success"
+        }
+      ]
+    },
+    {
+      "id": "process-data",
+      "actionType": "core.echo",
+      "parameters": {
+        "message": "Processing data for {{ trigger.username }}"
+      },
+      "edges": [
+        {
+          "targetNode": "summary",
+          "when": "success"
+        }
+      ]
+    },
+    {
+      "id": "summary",
+      "actionType": "core.echo",
+      "parameters": {
+        "message": "Summary: {{ context.data['greet-user'].echo }} -> {{ context.data['process-data'].echo }}"
+      }
+    }
+  ]
+}

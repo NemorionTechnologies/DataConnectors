@@ -1,0 +1,12 @@
+{
+  "id": "empty-parameters",
+  "displayName": "Empty Parameters",
+  "startNode": "no-params",
+  "nodes": [
+    {
+      "id": "no-params",
+      "actionType": "core.echo",
+      "parameters": {}
+    }
+  ]
+}

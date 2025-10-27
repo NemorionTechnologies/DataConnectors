@@ -1,0 +1,14 @@
+{
+  "id": "missing-start-node",
+  "displayName": "Missing Start Node",
+  "startNode": "nonexistent",
+  "nodes": [
+    {
+      "id": "step1",
+      "actionType": "core.echo",
+      "parameters": {
+        "message": "This workflow has invalid startNode"
+      }
+    }
+  ]
+}

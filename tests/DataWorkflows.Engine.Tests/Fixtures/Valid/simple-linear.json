@@ -1,0 +1,27 @@
+{
+  "id": "simple-linear",
+  "displayName": "Simple Linear Workflow",
+  "startNode": "step1",
+  "nodes": [
+    {
+      "id": "step1",
+      "actionType": "core.echo",
+      "parameters": {
+        "message": "First step"
+      },
+      "edges": [
+        {
+          "targetNode": "step2",
+          "when": "success"
+        }
+      ]
+    },
+    {
+      "id": "step2",
+      "actionType": "core.echo",
+      "parameters": {
+        "message": "Second step"
+      }
+    }
+  ]
+}

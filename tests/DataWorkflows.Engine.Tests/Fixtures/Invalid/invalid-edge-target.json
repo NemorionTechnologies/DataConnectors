@@ -1,0 +1,20 @@
+{
+  "id": "invalid-edge-target",
+  "displayName": "Invalid Edge Target",
+  "startNode": "step1",
+  "nodes": [
+    {
+      "id": "step1",
+      "actionType": "core.echo",
+      "parameters": {
+        "message": "First step"
+      },
+      "edges": [
+        {
+          "targetNode": "nonexistent-node",
+          "when": "success"
+        }
+      ]
+    }
+  ]
+}

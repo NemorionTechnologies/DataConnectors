@@ -1,0 +1,49 @@
+{
+  "id": "failure-edge-handling",
+  "displayName": "Failure Edge Handling",
+  "startNode": "risky-operation",
+  "nodes": [
+    {
+      "id": "risky-operation",
+      "actionType": "core.echo",
+      "parameters": {
+        "message": "This might fail"
+      },
+      "edges": [
+        {
+          "targetNode": "success-handler",
+          "when": "success"
+        },
+        {
+          "targetNode": "failure-handler",
+          "when": "failure"
+        },
+        {
+          "targetNode": "cleanup",
+          "when": "always"
+        }
+      ]
+    },
+    {
+      "id": "success-handler",
+      "actionType": "core.echo",
+      "parameters": {
+        "message": "Operation succeeded"
+      }
+    },
+    {
+      "id": "failure-handler",
+      "actionType": "core.echo",
+      "parameters": {
+        "message": "Operation failed, running recovery"
+      }
+    },
+    {
+      "id": "cleanup",
+      "actionType": "core.echo",
+      "parameters": {
+        "message": "Cleanup always runs"
+      }
+    }
+  ]
+}

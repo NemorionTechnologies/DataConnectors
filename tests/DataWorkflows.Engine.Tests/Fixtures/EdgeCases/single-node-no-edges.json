@@ -1,0 +1,14 @@
+{
+  "id": "single-node-no-edges",
+  "displayName": "Single Node With No Edges",
+  "startNode": "only-node",
+  "nodes": [
+    {
+      "id": "only-node",
+      "actionType": "core.echo",
+      "parameters": {
+        "message": "I have no edges"
+      }
+    }
+  ]
+}
