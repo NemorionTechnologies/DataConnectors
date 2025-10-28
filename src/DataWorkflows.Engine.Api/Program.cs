@@ -1,7 +1,9 @@
 using DataWorkflows.Engine.Core.Application.Orchestration;
 using DataWorkflows.Engine.Core.Application.Registry;
 using DataWorkflows.Engine.Core.Application.Templating;
+using DataWorkflows.Engine.Core.Application.Evaluation;
 using DataWorkflows.Engine.Core.Domain.Validation;
+using DataWorkflows.Engine.Core.Domain.Parsing;
 using DataWorkflows.Engine.Core.Configuration;
 using DataWorkflows.Engine.Infrastructure.Actions;
 using DataWorkflows.Data.Migrations;
@@ -18,6 +20,9 @@ builder.Services.AddSwaggerGen(c =>
     c.SwaggerDoc("v1", new() { Title = "DataWorkflows Engine API", Version = "v1" });
 });
 
+// Register configuration options
+builder.Services.Configure<WorkflowCatalogOptions>(builder.Configuration.GetSection("WorkflowCatalog"));
+
 // Register application services
 builder.Services.AddSingleton(provider =>
 {
@@ -28,6 +33,9 @@ builder.Services.AddSingleton(provider =>
 builder.Services.AddSingleton(TemplateEngineOptions.FromConfiguration(builder.Configuration));
 builder.Services.AddSingleton<ITemplateEngine, ScribanTemplateEngine>();
 builder.Services.AddSingleton<IParameterValidator, NoopParameterValidator>();
+builder.Services.AddSingleton<WorkflowParser>();
+builder.Services.AddSingleton<GraphValidator>();
+builder.Services.AddSingleton<JintConditionEvaluator>();
 builder.Services.AddSingleton(provider =>
 {
     var registry = provider.GetRequiredService<ActionRegistry>();
