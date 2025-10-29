@@ -4,6 +4,7 @@ using DataWorkflows.Engine.Core.Domain.Parsing;
 using DataWorkflows.Engine.Core.Domain.Validation;
 using DataWorkflows.Engine.Core.Application.Registry;
 using DataWorkflows.Engine.Core.Application.Evaluation;
+using DataWorkflows.Engine.Core.Services;
 using DataWorkflows.Data.Repositories;
 
 namespace DataWorkflows.Engine.Api.Controllers;
@@ -16,6 +17,7 @@ public class WorkflowsController : ControllerBase
     private readonly WorkflowParser _parser;
     private readonly GraphValidator _graphValidator;
     private readonly ActionRegistry _actionRegistry;
+    private readonly IActionCatalogRegistry _actionCatalogRegistry;
     private readonly JintConditionEvaluator _conditionEvaluator;
 
     public WorkflowsController(
@@ -23,12 +25,14 @@ public class WorkflowsController : ControllerBase
         WorkflowParser parser,
         GraphValidator graphValidator,
         ActionRegistry actionRegistry,
+        IActionCatalogRegistry actionCatalogRegistry,
         JintConditionEvaluator conditionEvaluator)
     {
         _config = config;
         _parser = parser;
         _graphValidator = graphValidator;
         _actionRegistry = actionRegistry;
+        _actionCatalogRegistry = actionCatalogRegistry;
         _conditionEvaluator = conditionEvaluator;
     }
 
@@ -183,7 +187,7 @@ public class WorkflowsController : ControllerBase
         }
 
         // Full publish-time validation
-        var validator = new WorkflowValidator(_graphValidator, _actionRegistry, _conditionEvaluator);
+        var validator = new WorkflowValidator(_graphValidator, _actionRegistry, _actionCatalogRegistry, _conditionEvaluator);
         var validationResult = validator.Validate(workflowDef);
 
         if (!validationResult.IsValid)
@@ -293,7 +297,7 @@ public class WorkflowsController : ControllerBase
         }
 
         // Validate
-        var validator = new WorkflowValidator(_graphValidator, _actionRegistry, _conditionEvaluator);
+        var validator = new WorkflowValidator(_graphValidator, _actionRegistry, _actionCatalogRegistry, _conditionEvaluator);
         var validationResult = validator.Validate(workflowDef);
 
         return Ok(new
@@ -321,7 +325,7 @@ public class WorkflowsController : ControllerBase
         }
 
         // Validate
-        var validator = new WorkflowValidator(_graphValidator, _actionRegistry, _conditionEvaluator);
+        var validator = new WorkflowValidator(_graphValidator, _actionRegistry, _actionCatalogRegistry, _conditionEvaluator);
         var validationResult = validator.Validate(workflowDef);
 
         return Ok(new

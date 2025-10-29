@@ -35,7 +35,7 @@ services:
   workflow-engine:
     build:
       context: .
-      dockerfile: src/DataWorkflows.Engine/Dockerfile
+      dockerfile: src/DataWorkflows.Engine.Api/Dockerfile
     container_name: dataworkflows-engine
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
@@ -105,8 +105,11 @@ services:
       - ASPNETCORE_ENVIRONMENT=Development
       - ASPNETCORE_URLS=http://+:80
       - Monday__ApiToken=${MONDAY_API_TOKEN}
+      - WORKFLOW_ENGINE_URL=http://workflow-engine:80
     ports:
       - "5012:80"
+    depends_on:
+      - workflow-engine
     networks:
       - dataworkflows-network
 

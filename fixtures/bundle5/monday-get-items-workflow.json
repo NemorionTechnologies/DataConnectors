@@ -1,0 +1,17 @@
+{
+  "id": "test-monday-get-items-wf",
+  "displayName": "Test Monday Get Items Workflow",
+  "description": "Test workflow to verify monday.get-items action works end-to-end",
+  "startNode": "get-items-node",
+  "nodes": [
+    {
+      "id": "get-items-node",
+      "actionType": "monday.get-items",
+      "parameters": {
+        "boardId": "{{ trigger.boardId }}",
+        "filter": null
+      },
+      "edges": []
+    }
+  ]
+}

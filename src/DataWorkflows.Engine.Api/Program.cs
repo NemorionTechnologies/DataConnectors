@@ -5,8 +5,12 @@ using DataWorkflows.Engine.Core.Application.Evaluation;
 using DataWorkflows.Engine.Core.Domain.Validation;
 using DataWorkflows.Engine.Core.Domain.Parsing;
 using DataWorkflows.Engine.Core.Configuration;
+using DataWorkflows.Engine.Core.Services;
+using DataWorkflows.Engine.Core.Validation;
 using DataWorkflows.Engine.Infrastructure.Actions;
+using DataWorkflows.Engine.Presentation.Services;
 using DataWorkflows.Data.Migrations;
+using DataWorkflows.Data.Repositories;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 
@@ -23,6 +27,18 @@ builder.Services.AddSwaggerGen(c =>
 // Register configuration options
 builder.Services.Configure<WorkflowCatalogOptions>(builder.Configuration.GetSection("WorkflowCatalog"));
 
+// Register data repositories
+var connectionString = builder.Configuration.GetConnectionString("Postgres")!;
+builder.Services.AddSingleton<IActionCatalogRepository>(sp => new ActionCatalogRepository(connectionString));
+
+// Register ActionCatalog services
+builder.Services.AddSingleton<IActionCatalogRegistry, ActionCatalogRegistry>();
+builder.Services.AddHostedService<ActionCatalogRegistryInitializer>();
+builder.Services.AddSingleton<ISchemaValidator, SchemaValidator>();
+
+// Register remote action executor
+builder.Services.AddSingleton<IRemoteActionExecutor, RemoteActionExecutor>();
+
 // Register application services
 builder.Services.AddSingleton(provider =>
 {
@@ -32,7 +48,7 @@ builder.Services.AddSingleton(provider =>
 });
 builder.Services.AddSingleton(TemplateEngineOptions.FromConfiguration(builder.Configuration));
 builder.Services.AddSingleton<ITemplateEngine, ScribanTemplateEngine>();
-builder.Services.AddSingleton<IParameterValidator, NoopParameterValidator>();
+builder.Services.AddSingleton<IParameterValidator, ActionCatalogParameterValidator>();
 builder.Services.AddSingleton<WorkflowParser>();
 builder.Services.AddSingleton<GraphValidator>();
 builder.Services.AddSingleton<JintConditionEvaluator>();
@@ -42,8 +58,10 @@ builder.Services.AddSingleton(provider =>
     var options = OrchestrationOptions.FromConfiguration(builder.Configuration);
     var templ = provider.GetRequiredService<ITemplateEngine>();
     var validator = provider.GetRequiredService<IParameterValidator>();
+    var actionCatalogRegistry = provider.GetRequiredService<IActionCatalogRegistry>();
+    var remoteActionExecutor = provider.GetRequiredService<IRemoteActionExecutor>();
     var logger = provider.GetRequiredService<ILogger<WorkflowConductor>>();
-    return new WorkflowConductor(registry, options, templ, validator, logger);
+    return new WorkflowConductor(registry, options, templ, validator, actionCatalogRegistry, remoteActionExecutor, logger);
 });
 
 // Add HTTP client for calling connector services

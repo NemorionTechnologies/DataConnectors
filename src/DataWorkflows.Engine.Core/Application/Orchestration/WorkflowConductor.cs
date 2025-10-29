@@ -15,6 +15,7 @@ using DataWorkflows.Engine.Core.Domain.Models;
 using DataWorkflows.Engine.Core.Application.Registry;
 using DataWorkflows.Engine.Core.Domain.Validation;
 using DataWorkflows.Engine.Core.Application.Templating;
+using DataWorkflows.Engine.Core.Services;
 using Microsoft.Extensions.Logging;
 
 namespace DataWorkflows.Engine.Core.Application.Orchestration;
@@ -28,14 +29,25 @@ public class WorkflowConductor
     private readonly OrchestrationOptions _options;
     private readonly ITemplateEngine _templateEngine;
     private readonly IParameterValidator _parameterValidator;
+    private readonly IActionCatalogRegistry _actionCatalogRegistry;
+    private readonly IRemoteActionExecutor _remoteActionExecutor;
     private readonly ILogger<WorkflowConductor> _logger;
 
-    public WorkflowConductor(ActionRegistry registry, OrchestrationOptions options, ITemplateEngine templateEngine, IParameterValidator parameterValidator, ILogger<WorkflowConductor> logger)
+    public WorkflowConductor(
+        ActionRegistry registry,
+        OrchestrationOptions options,
+        ITemplateEngine templateEngine,
+        IParameterValidator parameterValidator,
+        IActionCatalogRegistry actionCatalogRegistry,
+        IRemoteActionExecutor remoteActionExecutor,
+        ILogger<WorkflowConductor> logger)
     {
         _registry = registry;
         _options = options;
         _templateEngine = templateEngine;
         _parameterValidator = parameterValidator;
+        _actionCatalogRegistry = actionCatalogRegistry;
+        _remoteActionExecutor = remoteActionExecutor;
         _logger = logger;
     }
 
@@ -323,7 +335,35 @@ public class WorkflowConductor
         SemaphoreSlim semaphore,
         CancellationTokenSource workflowCts)
     {
-        var action = _registry.GetAction(node.ActionType);
+        // Determine if action is local (in ActionRegistry) or remote (in ActionCatalogRegistry)
+        IWorkflowAction? localAction = null;
+        var isRemoteAction = false;
+        string? connectorId = null;
+
+        try
+        {
+            localAction = _registry.GetAction(node.ActionType);
+        }
+        catch (KeyNotFoundException)
+        {
+            // Not a local action, check if it's a remote action
+            var catalogEntry = _actionCatalogRegistry.GetAction(node.ActionType);
+            if (catalogEntry != null)
+            {
+                isRemoteAction = true;
+                connectorId = catalogEntry.ConnectorId;
+                _logger.LogInformation(
+                    "Action {ActionType} is a remote action from connector {ConnectorId}",
+                    node.ActionType,
+                    connectorId);
+            }
+            else
+            {
+                _logger.LogError("Action {ActionType} not found in local or remote registries", node.ActionType);
+                throw new InvalidOperationException($"Action type '{node.ActionType}' is not registered");
+            }
+        }
+
         var policies = node.Policies ?? new NodePolicies(false);
 
         var attemptNumber = 1;
@@ -387,7 +427,19 @@ public class WorkflowConductor
                         Parameters: renderedParameters,
                         Services: null!);
 
-                    attemptResult = await action.ExecuteAsync(actionContext, actionCts.Token);
+                    // Execute either local or remote action
+                    if (isRemoteAction)
+                    {
+                        attemptResult = await _remoteActionExecutor.ExecuteRemoteActionAsync(
+                            connectorId!,
+                            node.ActionType,
+                            actionContext,
+                            actionCts.Token);
+                    }
+                    else
+                    {
+                        attemptResult = await localAction!.ExecuteAsync(actionContext, actionCts.Token);
+                    }
                 }
                 catch (OperationCanceledException) when (!workflowCts.IsCancellationRequested)
                 {

@@ -1,6 +1,7 @@
 using DataWorkflows.Engine.Core.Application.Evaluation;
 using DataWorkflows.Engine.Core.Application.Registry;
 using DataWorkflows.Engine.Core.Domain.Models;
+using DataWorkflows.Engine.Core.Services;
 
 namespace DataWorkflows.Engine.Core.Domain.Validation;
 
@@ -8,15 +9,18 @@ public class WorkflowValidator
 {
     private readonly GraphValidator _graphValidator;
     private readonly ActionRegistry _actionRegistry;
+    private readonly IActionCatalogRegistry _actionCatalogRegistry;
     private readonly JintConditionEvaluator _conditionEvaluator;
 
     public WorkflowValidator(
         GraphValidator graphValidator,
         ActionRegistry actionRegistry,
+        IActionCatalogRegistry actionCatalogRegistry,
         JintConditionEvaluator conditionEvaluator)
     {
         _graphValidator = graphValidator;
         _actionRegistry = actionRegistry;
+        _actionCatalogRegistry = actionCatalogRegistry;
         _conditionEvaluator = conditionEvaluator;
     }
 
@@ -38,18 +42,31 @@ public class WorkflowValidator
             return new ValidationResult(false, errors, warnings);
         }
 
-        // 3. Action availability check
+        // 3. Action availability check (check both local and remote actions)
         foreach (var node in workflow.Nodes)
         {
             if (node.ActionType != null)
             {
+                // Try local ActionRegistry first
+                bool foundLocal = false;
                 try
                 {
                     _actionRegistry.GetAction(node.ActionType);
+                    foundLocal = true;
                 }
                 catch (KeyNotFoundException)
                 {
-                    errors.Add($"Action '{node.ActionType}' not found or disabled (node '{node.Id}')");
+                    // Not a local action, check ActionCatalogRegistry for remote actions
+                }
+
+                if (!foundLocal)
+                {
+                    // Check ActionCatalogRegistry for remote actions
+                    var catalogEntry = _actionCatalogRegistry.GetAction(node.ActionType);
+                    if (catalogEntry == null || !catalogEntry.IsEnabled)
+                    {
+                        errors.Add($"Action '{node.ActionType}' not found or disabled (node '{node.Id}')");
+                    }
                 }
             }
         }

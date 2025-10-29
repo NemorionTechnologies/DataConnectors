@@ -15,14 +15,32 @@ public class WorkflowRepository
     public async Task<WorkflowRecord?> GetByIdAsync(string workflowId)
     {
         using var conn = new NpgsqlConnection(_connectionString);
-        var sql = "SELECT * FROM Workflows WHERE Id = @Id";
+        var sql = @"SELECT
+            Id,
+            DisplayName,
+            Description,
+            CurrentVersion,
+            Status,
+            IsEnabled,
+            CreatedAt,
+            UpdatedAt
+        FROM Workflows WHERE Id = @Id";
         return await conn.QuerySingleOrDefaultAsync<WorkflowRecord>(sql, new { Id = workflowId });
     }
 
     public async Task<List<WorkflowRecord>> GetAllAsync(string? status = null, bool? isEnabled = null)
     {
         using var conn = new NpgsqlConnection(_connectionString);
-        var sql = "SELECT * FROM Workflows WHERE 1=1";
+        var sql = @"SELECT
+            Id,
+            DisplayName,
+            Description,
+            CurrentVersion,
+            Status,
+            IsEnabled,
+            CreatedAt,
+            UpdatedAt
+        FROM Workflows WHERE 1=1";
 
         if (status != null)
             sql += " AND Status = @Status";

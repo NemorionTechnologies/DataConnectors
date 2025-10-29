@@ -2,6 +2,9 @@ using DataWorkflows.Connector.Monday.Application.Interfaces;
 using DataWorkflows.Connector.Monday.Application.Filters;
 using DataWorkflows.Connector.Monday.Infrastructure;
 using DataWorkflows.Connector.Monday.Presentation.Middleware;
+using DataWorkflows.Connector.Monday.Actions;
+using DataWorkflows.Connector.Monday.HostedServices;
+using DataWorkflows.Contracts.Actions;
 using Polly;
 using Polly.Extensions.Http;
 
@@ -18,6 +21,13 @@ builder.Services.AddSwaggerGen(c =>
 // Configure guardrails
 builder.Services.Configure<GuardrailOptions>(
     builder.Configuration.GetSection(GuardrailOptions.SectionName));
+
+// Register workflow actions
+builder.Services.AddScoped<IWorkflowAction, MondayGetItemsAction>();
+// Additional actions will be registered here as they are implemented
+
+// Register action registration service
+builder.Services.AddHostedService<ActionRegistrationService>();
 
 // Add filter services (Dependency Inversion Principle: depend on abstractions)
 builder.Services.AddSingleton<IMondayFilterGuardrailValidator, MondayFilterGuardrailValidator>();
