@@ -268,6 +268,23 @@ Monday Connector:
 7. `MondayUpdateColumnAction.cs` - monday.update-column (+ variations for timeline, status, link, text columns)
 8. `MondayUpdateSubItemColumnAction.cs` - monday.update-subitem-column (+ variations)
 
+**Note: Create Item and Create SubItem are DIFFERENT OPERATIONS for Monday**
+1. Separate GraphQL Mutations:
+  - create_item - creates regular items on a board
+  - create_subitem - creates sub-items under a parent item
+2. Different Required Parameters:
+  - create_item requires: board_id, item_name
+  - create_subitem requires: parent_item_id, item_name
+3. Infrastructure Implications:
+  - Need TWO separate methods in IMondayApiClient:
+    - CreateItemAsync(boardId, itemName, groupId?, columnValues?)
+    - CreateSubItemAsync(parentItemId, itemName, columnValues?)
+  - Need TWO separate MediatR commands:
+    - CreateItemCommand
+    - CreateSubItemCommand
+  - Need TWO separate handlers
+  - Need TWO separate workflow actions (NOT cosmetic aliases this time)
+
 **Pattern Established:**
 - Create parameter/output POCOs in Actions/Models/
 - Implement IWorkflowAction with Type property
@@ -344,5 +361,4 @@ Remote actions (Monday connector) are registered in ActionCatalogRegistry for va
 PostgreSQL: localhost:5433 (Docker container: dataworkflows-postgres)
 
 ## Engine Status
-✅ Running on http://localhost:5131
-✅ Swagger: http://localhost:5131/swagger
+RUN THE PROJECT USING DOCKER, DO NOT RUN LOCAL INSTANCES OF THE ENGINE, NOR CONNECTORS - EVERYTHING IS CONTAINERIZED FOR A REASON, USE DOCKER!

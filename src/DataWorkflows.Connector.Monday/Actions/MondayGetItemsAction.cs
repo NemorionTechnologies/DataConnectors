@@ -1,8 +1,7 @@
 using DataWorkflows.Connector.Monday.Actions.Models;
 using DataWorkflows.Connector.Monday.Application.DTOs;
-using DataWorkflows.Connector.Monday.Application.Queries.GetBoardItems;
+using DataWorkflows.Connector.Monday.Application.Interfaces;
 using DataWorkflows.Contracts.Actions;
-using MediatR;
 using System.Text.Json;
 
 namespace DataWorkflows.Connector.Monday.Actions;
@@ -13,16 +12,16 @@ namespace DataWorkflows.Connector.Monday.Actions;
 /// </summary>
 public sealed class MondayGetItemsAction : IWorkflowAction
 {
-    private readonly IMediator _mediator;
+    private readonly IMondayApiClient _mondayApiClient;
     private readonly ILogger<MondayGetItemsAction> _logger;
 
     public string Type => "monday.get-items";
 
     public MondayGetItemsAction(
-        IMediator mediator,
+        IMondayApiClient mondayApiClient,
         ILogger<MondayGetItemsAction> logger)
     {
-        _mediator = mediator ?? throw new ArgumentNullException(nameof(mediator));
+        _mondayApiClient = mondayApiClient ?? throw new ArgumentNullException(nameof(mondayApiClient));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -37,17 +36,13 @@ public sealed class MondayGetItemsAction : IWorkflowAction
                 context.WorkflowExecutionId,
                 context.NodeId);
 
-            // Deserialize and validate parameters
             var parameters = DeserializeParameters(context.Parameters);
 
-            // Execute the query using MediatR
-            var query = new GetBoardItemsQuery(
-                BoardId: parameters.BoardId,
-                Filter: parameters.Filter);
+            var items = await _mondayApiClient.GetBoardItemsAsync(
+                parameters.BoardId,
+                parameters.Filter,
+                ct);
 
-            var items = await _mediator.Send(query, ct);
-
-            // Map to output format
             var output = MapToOutput(items, parameters.BoardId);
 
             _logger.LogInformation(

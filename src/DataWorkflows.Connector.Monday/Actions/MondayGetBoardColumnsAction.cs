@@ -1,5 +1,4 @@
 using DataWorkflows.Connector.Monday.Actions.Models;
-using DataWorkflows.Connector.Monday.Application.DTOs;
 using DataWorkflows.Connector.Monday.Application.Interfaces;
 using DataWorkflows.Contracts.Actions;
 using System.Text.Json;
@@ -7,19 +6,19 @@ using System.Text.Json;
 namespace DataWorkflows.Connector.Monday.Actions;
 
 /// <summary>
-/// Workflow action for retrieving sub-items from a Monday.com parent item.
-/// Implements the "monday.get-subitems" action type.
+/// Workflow action for retrieving column metadata from a Monday.com board.
+/// Implements the "monday.get-board-columns" action type.
 /// </summary>
-public sealed class MondayGetSubItemsAction : IWorkflowAction
+public sealed class MondayGetBoardColumnsAction : IWorkflowAction
 {
     private readonly IMondayApiClient _mondayApiClient;
-    private readonly ILogger<MondayGetSubItemsAction> _logger;
+    private readonly ILogger<MondayGetBoardColumnsAction> _logger;
 
-    public string Type => "monday.get-subitems";
+    public string Type => "monday.get-board-columns";
 
-    public MondayGetSubItemsAction(
+    public MondayGetBoardColumnsAction(
         IMondayApiClient mondayApiClient,
-        ILogger<MondayGetSubItemsAction> logger)
+        ILogger<MondayGetBoardColumnsAction> logger)
     {
         _mondayApiClient = mondayApiClient ?? throw new ArgumentNullException(nameof(mondayApiClient));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -32,32 +31,31 @@ public sealed class MondayGetSubItemsAction : IWorkflowAction
         try
         {
             _logger.LogInformation(
-                "Executing monday.get-subitems action for workflow {WorkflowExecutionId}, node {NodeId}",
+                "Executing monday.get-board-columns action for workflow {WorkflowExecutionId}, node {NodeId}",
                 context.WorkflowExecutionId,
                 context.NodeId);
 
             var parameters = DeserializeParameters(context.Parameters);
 
-            var items = await _mondayApiClient.GetSubItemsAsync(
-                parameters.ParentItemId,
-                parameters.Filter,
+            var columns = await _mondayApiClient.GetBoardColumnsAsync(
+                parameters.BoardId,
                 ct);
 
-            var output = MapToOutput(items, parameters.ParentItemId);
+            var output = MapToOutput(columns, parameters.BoardId);
 
             _logger.LogInformation(
-                "Successfully retrieved {Count} sub-items from parent {ParentItemId} for node {NodeId}",
+                "Successfully retrieved {Count} columns from board {BoardId} for node {NodeId}",
                 output.Count,
-                parameters.ParentItemId,
+                parameters.BoardId,
                 context.NodeId);
 
             return new ActionExecutionResult(
                 Status: ActionExecutionStatus.Succeeded,
                 Outputs: new Dictionary<string, object?>
                 {
-                    ["items"] = output.Items,
+                    ["columns"] = output.Columns,
                     ["count"] = output.Count,
-                    ["parentItemId"] = output.ParentItemId
+                    ["boardId"] = output.BoardId
                 },
                 ErrorMessage: null);
         }
@@ -71,7 +69,7 @@ public sealed class MondayGetSubItemsAction : IWorkflowAction
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error executing monday.get-subitems for node {NodeId}", context.NodeId);
+            _logger.LogError(ex, "Error executing monday.get-board-columns for node {NodeId}", context.NodeId);
 
             var isRetriable = IsRetriableError(ex);
 
@@ -82,14 +80,14 @@ public sealed class MondayGetSubItemsAction : IWorkflowAction
         }
     }
 
-    private GetSubItemsParameters DeserializeParameters(Dictionary<string, object?> parameters)
+    private GetBoardColumnsParameters DeserializeParameters(Dictionary<string, object?> parameters)
     {
         var json = JsonSerializer.Serialize(parameters, new JsonSerializerOptions
         {
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase
         });
 
-        var typedParameters = JsonSerializer.Deserialize<GetSubItemsParameters>(json, new JsonSerializerOptions
+        var typedParameters = JsonSerializer.Deserialize<GetBoardColumnsParameters>(json, new JsonSerializerOptions
         {
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
             PropertyNameCaseInsensitive = true
@@ -97,36 +95,26 @@ public sealed class MondayGetSubItemsAction : IWorkflowAction
 
         if (typedParameters == null)
         {
-            throw new JsonException("Failed to deserialize parameters to GetSubItemsParameters");
+            throw new JsonException("Failed to deserialize parameters to GetBoardColumnsParameters");
         }
 
         return typedParameters;
     }
 
-    private GetSubItemsOutput MapToOutput(IEnumerable<MondayItemDto> items, string parentItemId)
+    private GetBoardColumnsOutput MapToOutput(IReadOnlyList<Application.DTOs.ColumnMetadata> columns, string boardId)
     {
-        var itemsList = items.Select(item => new MondayItem
+        var columnsList = columns.Select(col => new BoardColumn
         {
-            Id = item.Id,
-            ParentId = item.ParentId,
-            Title = item.Title,
-            GroupId = item.GroupId,
-            CreatedAt = item.CreatedAt,
-            UpdatedAt = item.UpdatedAt,
-            ColumnValues = item.ColumnValues.ToDictionary(
-                kvp => kvp.Key,
-                kvp => new ColumnValue
-                {
-                    Value = kvp.Value.Value,
-                    Text = kvp.Value.Text
-                })
+            Id = col.Id,
+            Title = col.Title,
+            Type = col.Type
         }).ToList();
 
-        return new GetSubItemsOutput
+        return new GetBoardColumnsOutput
         {
-            Items = itemsList,
-            Count = itemsList.Count,
-            ParentItemId = parentItemId
+            Columns = columnsList,
+            Count = columnsList.Count,
+            BoardId = boardId
         };
     }
 

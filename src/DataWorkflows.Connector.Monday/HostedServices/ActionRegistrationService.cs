@@ -132,6 +132,66 @@ public sealed class ActionRegistrationService : BackgroundService
                     outputSchema = SchemaGenerator.GenerateSchema<UpdateColumnOutput>(),
                     requiresAuth = true,
                     isEnabled = true
+                },
+                new
+                {
+                    actionType = "monday.update-subitem-column",
+                    displayName = "Update Sub-Item Column Value",
+                    description = "Update a column value on a Monday.com sub-item (cosmetic alias for user clarity - uses same infrastructure as update-column)",
+                    parameterSchema = SchemaGenerator.GenerateSchema<UpdateSubItemColumnParameters>(),
+                    outputSchema = SchemaGenerator.GenerateSchema<UpdateSubItemColumnOutput>(),
+                    requiresAuth = true,
+                    isEnabled = true
+                },
+                new
+                {
+                    actionType = "monday.create-item",
+                    displayName = "Create Board Item",
+                    description = "Create a new item on a Monday.com board",
+                    parameterSchema = SchemaGenerator.GenerateSchema<CreateItemParameters>(),
+                    outputSchema = SchemaGenerator.GenerateSchema<CreateItemOutput>(),
+                    requiresAuth = true,
+                    isEnabled = true
+                },
+                new
+                {
+                    actionType = "monday.create-subitem",
+                    displayName = "Create Sub-Item",
+                    description = "Create a new sub-item under a parent item in Monday.com",
+                    parameterSchema = SchemaGenerator.GenerateSchema<CreateSubItemParameters>(),
+                    outputSchema = SchemaGenerator.GenerateSchema<CreateSubItemOutput>(),
+                    requiresAuth = true,
+                    isEnabled = true
+                },
+                new
+                {
+                    actionType = "monday.get-board-columns",
+                    displayName = "Get Board Columns",
+                    description = "Retrieve column metadata from a Monday.com board",
+                    parameterSchema = SchemaGenerator.GenerateSchema<GetBoardColumnsParameters>(),
+                    outputSchema = SchemaGenerator.GenerateSchema<GetBoardColumnsOutput>(),
+                    requiresAuth = true,
+                    isEnabled = true
+                },
+                new
+                {
+                    actionType = "monday.get-board-updates",
+                    displayName = "Get Board Updates",
+                    description = "Retrieve all updates from a Monday.com board with optional date filtering",
+                    parameterSchema = SchemaGenerator.GenerateSchema<GetBoardUpdatesParameters>(),
+                    outputSchema = SchemaGenerator.GenerateSchema<GetBoardUpdatesOutput>(),
+                    requiresAuth = true,
+                    isEnabled = true
+                },
+                new
+                {
+                    actionType = "monday.get-items-with-details",
+                    displayName = "Get Items with Details",
+                    description = "Retrieve items with their sub-items and updates included (saves multiple API calls)",
+                    parameterSchema = SchemaGenerator.GenerateSchema<GetItemsWithDetailsParameters>(),
+                    outputSchema = SchemaGenerator.GenerateSchema<GetItemsWithDetailsOutput>(),
+                    requiresAuth = true,
+                    isEnabled = true
                 }
             }
         };

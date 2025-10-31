@@ -1,7 +1,7 @@
 using DataWorkflows.Contracts.Actions;
 using Microsoft.AspNetCore.Mvc;
 
-namespace DataWorkflows.Connector.Monday.Controllers;
+namespace DataWorkflows.Connector.Monday.Presentation.Controllers;
 
 /// <summary>
 /// Generic action execution endpoint for the Monday connector.

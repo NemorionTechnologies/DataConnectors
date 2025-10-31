@@ -50,4 +50,17 @@ public interface IMondayApiClient
         string columnId,
         string valueJson,
         CancellationToken cancellationToken);
+
+    Task<MondayItemDto> CreateItemAsync(
+        string boardId,
+        string itemName,
+        string? groupId,
+        Dictionary<string, object>? columnValues,
+        CancellationToken cancellationToken);
+
+    Task<MondayItemDto> CreateSubItemAsync(
+        string parentItemId,
+        string itemName,
+        Dictionary<string, object>? columnValues,
+        CancellationToken cancellationToken);
 }

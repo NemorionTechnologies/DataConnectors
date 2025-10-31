@@ -1,8 +1,7 @@
 using DataWorkflows.Connector.Monday.Actions.Models;
 using DataWorkflows.Connector.Monday.Application.DTOs;
-using DataWorkflows.Connector.Monday.Application.Queries.GetBoardActivity;
+using DataWorkflows.Connector.Monday.Application.Interfaces;
 using DataWorkflows.Contracts.Actions;
-using MediatR;
 using System.Text.Json;
 
 namespace DataWorkflows.Connector.Monday.Actions;
@@ -13,16 +12,16 @@ namespace DataWorkflows.Connector.Monday.Actions;
 /// </summary>
 public sealed class MondayGetBoardActivityAction : IWorkflowAction
 {
-    private readonly IMediator _mediator;
+    private readonly IMondayApiClient _mondayApiClient;
     private readonly ILogger<MondayGetBoardActivityAction> _logger;
 
     public string Type => "monday.get-board-activity";
 
     public MondayGetBoardActivityAction(
-        IMediator mediator,
+        IMondayApiClient mondayApiClient,
         ILogger<MondayGetBoardActivityAction> logger)
     {
-        _mediator = mediator ?? throw new ArgumentNullException(nameof(mediator));
+        _mondayApiClient = mondayApiClient ?? throw new ArgumentNullException(nameof(mondayApiClient));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -39,12 +38,11 @@ public sealed class MondayGetBoardActivityAction : IWorkflowAction
 
             var parameters = DeserializeParameters(context.Parameters);
 
-            var query = new GetBoardActivityQuery(
-                BoardId: parameters.BoardId,
-                FromDate: parameters.FromDate,
-                ToDate: parameters.ToDate);
-
-            var activities = await _mediator.Send(query, ct);
+            var activities = await _mondayApiClient.GetBoardActivityAsync(
+                parameters.BoardId,
+                parameters.FromDate,
+                parameters.ToDate,
+                ct);
 
             var output = MapToOutput(activities, parameters.BoardId);
 

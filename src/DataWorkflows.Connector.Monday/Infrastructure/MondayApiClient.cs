@@ -369,6 +369,59 @@ public class MondayApiClient : IMondayApiClient
         return MapToMondayItemDto(changeColumnValue);
     }
 
+    public async Task<MondayItemDto> CreateItemAsync(
+        string boardId,
+        string itemName,
+        string? groupId,
+        Dictionary<string, object>? columnValues,
+        CancellationToken cancellationToken)
+    {
+        var mutation = BuildCreateItemMutation(boardId, itemName, groupId, columnValues);
+        var response = await ExecuteGraphQLQueryAsync<CreateItemResponse>(mutation, cancellationToken);
+
+        if (response?.Data?.CreateItem is not JsonElement createdItem)
+        {
+            throw new InvalidOperationException($"Failed to create item '{itemName}' on board {boardId}");
+        }
+
+        if (createdItem.ValueKind == JsonValueKind.Null || createdItem.ValueKind == JsonValueKind.Undefined)
+        {
+            throw new InvalidOperationException($"Failed to create item '{itemName}' on board {boardId}");
+        }
+
+        _logger.LogInformation("Created item {ItemId} on board {BoardId}",
+            createdItem.TryGetProperty("id", out var id) ? id.GetString() : "unknown",
+            boardId);
+
+        return MapToMondayItemDto(createdItem);
+    }
+
+    public async Task<MondayItemDto> CreateSubItemAsync(
+        string parentItemId,
+        string itemName,
+        Dictionary<string, object>? columnValues,
+        CancellationToken cancellationToken)
+    {
+        var mutation = BuildCreateSubItemMutation(parentItemId, itemName, columnValues);
+        var response = await ExecuteGraphQLQueryAsync<CreateSubItemResponse>(mutation, cancellationToken);
+
+        if (response?.Data?.CreateSubItem is not JsonElement createdSubItem)
+        {
+            throw new InvalidOperationException($"Failed to create sub-item '{itemName}' under parent {parentItemId}");
+        }
+
+        if (createdSubItem.ValueKind == JsonValueKind.Null || createdSubItem.ValueKind == JsonValueKind.Undefined)
+        {
+            throw new InvalidOperationException($"Failed to create sub-item '{itemName}' under parent {parentItemId}");
+        }
+
+        _logger.LogInformation("Created sub-item {ItemId} under parent {ParentItemId}",
+            createdSubItem.TryGetProperty("id", out var id) ? id.GetString() : "unknown",
+            parentItemId);
+
+        return MapToMondayItemDto(createdSubItem);
+    }
+
     private async Task<T?> ExecuteGraphQLQueryAsync<T>(string query, CancellationToken cancellationToken)
 
     {
@@ -691,6 +744,74 @@ public class MondayApiClient : IMondayApiClient
                 created_at
                 updated_at
                 parent_item {{ id }}
+                column_values {{
+                    id
+                    value
+                    text
+                }}
+            }}
+        }}";
+    }
+
+    private string BuildCreateItemMutation(string boardId, string itemName, string? groupId, Dictionary<string, object>? columnValues)
+    {
+        var escapedItemName = EscapeGraphQlString(itemName);
+        var groupIdArg = !string.IsNullOrWhiteSpace(groupId) ? $", group_id: \"{EscapeGraphQlString(groupId)}\"" : "";
+        var columnValuesArg = "";
+
+        if (columnValues != null && columnValues.Count > 0)
+        {
+            var columnValuesJson = JsonSerializer.Serialize(columnValues);
+            var escapedColumnValues = columnValuesJson.Replace("\\", "\\\\").Replace("\"", "\\\"");
+            columnValuesArg = $", column_values: \"{escapedColumnValues}\"";
+        }
+
+        return $@"
+        mutation {{
+            create_item(
+                board_id: {boardId},
+                item_name: ""{escapedItemName}""{groupIdArg}{columnValuesArg}
+            ) {{
+                id
+                name
+                group {{ id }}
+                created_at
+                updated_at
+                parent_item {{ id }}
+                column_values {{
+                    id
+                    value
+                    text
+                }}
+            }}
+        }}";
+    }
+
+    private string BuildCreateSubItemMutation(string parentItemId, string itemName, Dictionary<string, object>? columnValues)
+    {
+        var escapedItemName = EscapeGraphQlString(itemName);
+        var columnValuesArg = "";
+
+        if (columnValues != null && columnValues.Count > 0)
+        {
+            var columnValuesJson = JsonSerializer.Serialize(columnValues);
+            var escapedColumnValues = columnValuesJson.Replace("\\", "\\\\").Replace("\"", "\\\"");
+            columnValuesArg = $", column_values: \"{escapedColumnValues}\"";
+        }
+
+        return $@"
+        mutation {{
+            create_subitem(
+                parent_item_id: {parentItemId},
+                item_name: ""{escapedItemName}""{columnValuesArg}
+            ) {{
+                id
+                name
+                group {{ id }}
+                created_at
+                updated_at
+                parent_item {{ id }}
+                board {{ id }}
                 column_values {{
                     id
                     value

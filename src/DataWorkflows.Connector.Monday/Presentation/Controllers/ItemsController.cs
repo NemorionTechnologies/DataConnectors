@@ -1,8 +1,5 @@
-using DataWorkflows.Connector.Monday.Application.Commands.UpdateColumnValue;
 using DataWorkflows.Connector.Monday.Application.DTOs;
-using DataWorkflows.Connector.Monday.Application.Queries.GetItemUpdates;
-using DataWorkflows.Connector.Monday.Application.Queries.GetSubItems;
-using MediatR;
+using DataWorkflows.Connector.Monday.Application.Interfaces;
 using Microsoft.AspNetCore.Mvc;
 
 namespace DataWorkflows.Connector.Monday.Presentation.Controllers;
@@ -11,12 +8,12 @@ namespace DataWorkflows.Connector.Monday.Presentation.Controllers;
 [Route("api/v1/[controller]")]
 public class ItemsController : ControllerBase
 {
-    private readonly IMediator _mediator;
+    private readonly IMondayApiClient _mondayApiClient;
     private readonly ILogger<ItemsController> _logger;
 
-    public ItemsController(IMediator mediator, ILogger<ItemsController> logger)
+    public ItemsController(IMondayApiClient mondayApiClient, ILogger<ItemsController> logger)
     {
-        _mediator = mediator;
+        _mondayApiClient = mondayApiClient;
         _logger = logger;
     }
 
@@ -30,8 +27,7 @@ public class ItemsController : ControllerBase
         CancellationToken cancellationToken)
     {
         var filterDefinition = GetItemsFilterModel.ToFilterDefinition(filter);
-        var query = new GetSubItemsQuery(itemId, filterDefinition);
-        var result = await _mediator.Send(query, cancellationToken);
+        var result = await _mondayApiClient.GetSubItemsAsync(itemId, filterDefinition, cancellationToken);
         return Ok(result);
     }
 
@@ -45,8 +41,7 @@ public class ItemsController : ControllerBase
         [FromQuery] DateTime? toDate,
         CancellationToken cancellationToken)
     {
-        var query = new GetItemUpdatesQuery(itemId, fromDate, toDate);
-        var result = await _mediator.Send(query, cancellationToken);
+        var result = await _mondayApiClient.GetItemUpdatesAsync(itemId, fromDate, toDate, cancellationToken);
         return Ok(result);
     }
 
@@ -64,12 +59,12 @@ public class ItemsController : ControllerBase
         [FromBody] UpdateColumnValueRequest request,
         CancellationToken cancellationToken)
     {
-        var command = new UpdateColumnValueCommand(
+        var result = await _mondayApiClient.UpdateColumnValueAsync(
             request.BoardId,
             itemId,
+            columnId,
             request.ValueJson,
-            ColumnId: columnId);
-        var result = await _mediator.Send(command, cancellationToken);
+            cancellationToken);
         return Ok(result);
     }
 
@@ -87,13 +82,15 @@ public class ItemsController : ControllerBase
         [FromBody] UpdateColumnValueRequest request,
         CancellationToken cancellationToken)
     {
-        var command = new UpdateColumnValueCommand(
+        // Determine the column ID to use
+        var columnId = request.ColumnId ?? request.ColumnTitle ?? throw new ArgumentException("Either ColumnId or ColumnTitle must be provided");
+
+        var result = await _mondayApiClient.UpdateColumnValueAsync(
             request.BoardId,
             itemId,
+            columnId,
             request.ValueJson,
-            request.ColumnId,
-            request.ColumnTitle);
-        var result = await _mediator.Send(command, cancellationToken);
+            cancellationToken);
         return Ok(result);
     }
 }

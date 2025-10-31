@@ -1,10 +1,5 @@
 using DataWorkflows.Connector.Monday.Application.DTOs;
 using DataWorkflows.Connector.Monday.Application.Interfaces;
-using DataWorkflows.Connector.Monday.Application.Queries.GetBoardActivity;
-using DataWorkflows.Connector.Monday.Application.Queries.GetBoardItems;
-using DataWorkflows.Connector.Monday.Application.Queries.GetBoardUpdates;
-using DataWorkflows.Connector.Monday.Application.Queries.GetHydratedBoardItems;
-using MediatR;
 using Microsoft.AspNetCore.Mvc;
 
 namespace DataWorkflows.Connector.Monday.Presentation.Controllers;
@@ -13,16 +8,16 @@ namespace DataWorkflows.Connector.Monday.Presentation.Controllers;
 [Route("api/v1/[controller]")]
 public class BoardsController : ControllerBase
 {
-    private readonly IMediator _mediator;
+    private readonly IMondayApiClient _mondayApiClient;
     private readonly IColumnMetadataCache _cache;
     private readonly ILogger<BoardsController> _logger;
 
     public BoardsController(
-        IMediator mediator,
+        IMondayApiClient mondayApiClient,
         IColumnMetadataCache cache,
         ILogger<BoardsController> logger)
     {
-        _mediator = mediator;
+        _mondayApiClient = mondayApiClient;
         _cache = cache;
         _logger = logger;
     }
@@ -37,8 +32,7 @@ public class BoardsController : ControllerBase
         CancellationToken cancellationToken)
     {
         var filterDefinition = GetItemsFilterModel.ToFilterDefinition(filter);
-        var query = new GetBoardItemsQuery(boardId, filterDefinition);
-        var result = await _mediator.Send(query, cancellationToken);
+        var result = await _mondayApiClient.GetBoardItemsAsync(boardId, filterDefinition, cancellationToken);
         return Ok(result);
     }
 
@@ -52,8 +46,7 @@ public class BoardsController : ControllerBase
         [FromQuery] DateTime? toDate,
         CancellationToken cancellationToken)
     {
-        var query = new GetBoardActivityQuery(boardId, fromDate, toDate);
-        var result = await _mediator.Send(query, cancellationToken);
+        var result = await _mondayApiClient.GetBoardActivityAsync(boardId, fromDate, toDate, cancellationToken);
         return Ok(result);
     }
 
@@ -67,8 +60,7 @@ public class BoardsController : ControllerBase
         [FromQuery] DateTime? toDate,
         CancellationToken cancellationToken)
     {
-        var query = new GetBoardUpdatesQuery(boardId, fromDate, toDate);
-        var result = await _mediator.Send(query, cancellationToken);
+        var result = await _mondayApiClient.GetBoardUpdatesAsync(boardId, fromDate, toDate, cancellationToken);
         return Ok(result);
     }
 
@@ -82,8 +74,7 @@ public class BoardsController : ControllerBase
         CancellationToken cancellationToken)
     {
         var filterDefinition = GetItemsFilterModel.ToFilterDefinition(filter);
-        var query = new GetHydratedBoardItemsQuery(boardId, filterDefinition);
-        var result = await _mediator.Send(query, cancellationToken);
+        var result = await _mondayApiClient.GetHydratedBoardItemsAsync(boardId, filterDefinition, cancellationToken);
         return Ok(result);
     }
 

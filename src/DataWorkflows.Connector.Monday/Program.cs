@@ -28,6 +28,12 @@ builder.Services.AddScoped<IWorkflowAction, MondayGetSubItemsAction>();
 builder.Services.AddScoped<IWorkflowAction, MondayGetItemUpdatesAction>();
 builder.Services.AddScoped<IWorkflowAction, MondayGetBoardActivityAction>();
 builder.Services.AddScoped<IWorkflowAction, MondayUpdateColumnAction>();
+builder.Services.AddScoped<IWorkflowAction, MondayUpdateSubItemColumnAction>();
+builder.Services.AddScoped<IWorkflowAction, MondayCreateItemAction>();
+builder.Services.AddScoped<IWorkflowAction, MondayCreateSubItemAction>();
+builder.Services.AddScoped<IWorkflowAction, MondayGetBoardColumnsAction>();
+builder.Services.AddScoped<IWorkflowAction, MondayGetBoardUpdatesAction>();
+builder.Services.AddScoped<IWorkflowAction, MondayGetItemsWithDetailsAction>();
 
 // Register action registration service
 builder.Services.AddHostedService<ActionRegistrationService>();
@@ -35,9 +41,6 @@ builder.Services.AddHostedService<ActionRegistrationService>();
 // Add filter services (Dependency Inversion Principle: depend on abstractions)
 builder.Services.AddSingleton<IMondayFilterGuardrailValidator, MondayFilterGuardrailValidator>();
 builder.Services.AddSingleton<IMondayFilterTranslator, MondayFilterTranslator>();
-
-// Add MediatR
-builder.Services.AddMediatR(cfg => cfg.RegisterServicesFromAssembly(typeof(Program).Assembly));
 
 // Add exception handling
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();

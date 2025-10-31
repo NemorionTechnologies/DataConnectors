@@ -1,5 +1,4 @@
 using DataWorkflows.Connector.Monday.Actions.Models;
-using DataWorkflows.Connector.Monday.Application.DTOs;
 using DataWorkflows.Connector.Monday.Application.Interfaces;
 using DataWorkflows.Contracts.Actions;
 using System.Text.Json;
@@ -7,19 +6,20 @@ using System.Text.Json;
 namespace DataWorkflows.Connector.Monday.Actions;
 
 /// <summary>
-/// Workflow action for retrieving sub-items from a Monday.com parent item.
-/// Implements the "monday.get-subitems" action type.
+/// Workflow action for retrieving items with their sub-items and updates included.
+/// Implements the "monday.get-items-with-details" action type.
+/// This is a convenience action that saves making multiple separate API calls.
 /// </summary>
-public sealed class MondayGetSubItemsAction : IWorkflowAction
+public sealed class MondayGetItemsWithDetailsAction : IWorkflowAction
 {
     private readonly IMondayApiClient _mondayApiClient;
-    private readonly ILogger<MondayGetSubItemsAction> _logger;
+    private readonly ILogger<MondayGetItemsWithDetailsAction> _logger;
 
-    public string Type => "monday.get-subitems";
+    public string Type => "monday.get-items-with-details";
 
-    public MondayGetSubItemsAction(
+    public MondayGetItemsWithDetailsAction(
         IMondayApiClient mondayApiClient,
-        ILogger<MondayGetSubItemsAction> logger)
+        ILogger<MondayGetItemsWithDetailsAction> logger)
     {
         _mondayApiClient = mondayApiClient ?? throw new ArgumentNullException(nameof(mondayApiClient));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -32,23 +32,23 @@ public sealed class MondayGetSubItemsAction : IWorkflowAction
         try
         {
             _logger.LogInformation(
-                "Executing monday.get-subitems action for workflow {WorkflowExecutionId}, node {NodeId}",
+                "Executing monday.get-items-with-details action for workflow {WorkflowExecutionId}, node {NodeId}",
                 context.WorkflowExecutionId,
                 context.NodeId);
 
             var parameters = DeserializeParameters(context.Parameters);
 
-            var items = await _mondayApiClient.GetSubItemsAsync(
-                parameters.ParentItemId,
+            var hydratedItems = await _mondayApiClient.GetHydratedBoardItemsAsync(
+                parameters.BoardId,
                 parameters.Filter,
                 ct);
 
-            var output = MapToOutput(items, parameters.ParentItemId);
+            var output = MapToOutput(hydratedItems, parameters.BoardId);
 
             _logger.LogInformation(
-                "Successfully retrieved {Count} sub-items from parent {ParentItemId} for node {NodeId}",
+                "Successfully retrieved {Count} items with details from board {BoardId} for node {NodeId}",
                 output.Count,
-                parameters.ParentItemId,
+                parameters.BoardId,
                 context.NodeId);
 
             return new ActionExecutionResult(
@@ -57,7 +57,7 @@ public sealed class MondayGetSubItemsAction : IWorkflowAction
                 {
                     ["items"] = output.Items,
                     ["count"] = output.Count,
-                    ["parentItemId"] = output.ParentItemId
+                    ["boardId"] = output.BoardId
                 },
                 ErrorMessage: null);
         }
@@ -71,7 +71,7 @@ public sealed class MondayGetSubItemsAction : IWorkflowAction
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error executing monday.get-subitems for node {NodeId}", context.NodeId);
+            _logger.LogError(ex, "Error executing monday.get-items-with-details for node {NodeId}", context.NodeId);
 
             var isRetriable = IsRetriableError(ex);
 
@@ -82,14 +82,14 @@ public sealed class MondayGetSubItemsAction : IWorkflowAction
         }
     }
 
-    private GetSubItemsParameters DeserializeParameters(Dictionary<string, object?> parameters)
+    private GetItemsWithDetailsParameters DeserializeParameters(Dictionary<string, object?> parameters)
     {
         var json = JsonSerializer.Serialize(parameters, new JsonSerializerOptions
         {
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase
         });
 
-        var typedParameters = JsonSerializer.Deserialize<GetSubItemsParameters>(json, new JsonSerializerOptions
+        var typedParameters = JsonSerializer.Deserialize<GetItemsWithDetailsParameters>(json, new JsonSerializerOptions
         {
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
             PropertyNameCaseInsensitive = true
@@ -97,15 +97,15 @@ public sealed class MondayGetSubItemsAction : IWorkflowAction
 
         if (typedParameters == null)
         {
-            throw new JsonException("Failed to deserialize parameters to GetSubItemsParameters");
+            throw new JsonException("Failed to deserialize parameters to GetItemsWithDetailsParameters");
         }
 
         return typedParameters;
     }
 
-    private GetSubItemsOutput MapToOutput(IEnumerable<MondayItemDto> items, string parentItemId)
+    private GetItemsWithDetailsOutput MapToOutput(IEnumerable<Application.DTOs.MondayHydratedItemDto> hydratedItems, string boardId)
     {
-        var itemsList = items.Select(item => new MondayItem
+        var itemsList = hydratedItems.Select(item => new MondayItemWithDetails
         {
             Id = item.Id,
             ParentId = item.ParentId,
@@ -119,14 +119,38 @@ public sealed class MondayGetSubItemsAction : IWorkflowAction
                 {
                     Value = kvp.Value.Value,
                     Text = kvp.Value.Text
-                })
+                }),
+            SubItems = item.SubItems.Select(subItem => new MondayItem
+            {
+                Id = subItem.Id,
+                ParentId = subItem.ParentId,
+                Title = subItem.Title,
+                GroupId = subItem.GroupId,
+                CreatedAt = subItem.CreatedAt,
+                UpdatedAt = subItem.UpdatedAt,
+                ColumnValues = subItem.ColumnValues.ToDictionary(
+                    kvp => kvp.Key,
+                    kvp => new ColumnValue
+                    {
+                        Value = kvp.Value.Value,
+                        Text = kvp.Value.Text
+                    })
+            }).ToList(),
+            Updates = item.Updates.Select(update => new MondayUpdate
+            {
+                Id = update.Id,
+                ItemId = update.ItemId,
+                BodyText = update.BodyText,
+                CreatorId = update.CreatorId,
+                CreatedAt = update.CreatedAt
+            }).ToList()
         }).ToList();
 
-        return new GetSubItemsOutput
+        return new GetItemsWithDetailsOutput
         {
             Items = itemsList,
             Count = itemsList.Count,
-            ParentItemId = parentItemId
+            BoardId = boardId
         };
     }
 

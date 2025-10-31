@@ -7,19 +7,19 @@ using System.Text.Json;
 namespace DataWorkflows.Connector.Monday.Actions;
 
 /// <summary>
-/// Workflow action for retrieving sub-items from a Monday.com parent item.
-/// Implements the "monday.get-subitems" action type.
+/// Workflow action for creating a new item on a Monday.com board.
+/// Implements the "monday.create-item" action type.
 /// </summary>
-public sealed class MondayGetSubItemsAction : IWorkflowAction
+public sealed class MondayCreateItemAction : IWorkflowAction
 {
     private readonly IMondayApiClient _mondayApiClient;
-    private readonly ILogger<MondayGetSubItemsAction> _logger;
+    private readonly ILogger<MondayCreateItemAction> _logger;
 
-    public string Type => "monday.get-subitems";
+    public string Type => "monday.create-item";
 
-    public MondayGetSubItemsAction(
+    public MondayCreateItemAction(
         IMondayApiClient mondayApiClient,
-        ILogger<MondayGetSubItemsAction> logger)
+        ILogger<MondayCreateItemAction> logger)
     {
         _mondayApiClient = mondayApiClient ?? throw new ArgumentNullException(nameof(mondayApiClient));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -32,32 +32,35 @@ public sealed class MondayGetSubItemsAction : IWorkflowAction
         try
         {
             _logger.LogInformation(
-                "Executing monday.get-subitems action for workflow {WorkflowExecutionId}, node {NodeId}",
+                "Executing monday.create-item action for workflow {WorkflowExecutionId}, node {NodeId}",
                 context.WorkflowExecutionId,
                 context.NodeId);
 
             var parameters = DeserializeParameters(context.Parameters);
 
-            var items = await _mondayApiClient.GetSubItemsAsync(
-                parameters.ParentItemId,
-                parameters.Filter,
+            var createdItem = await _mondayApiClient.CreateItemAsync(
+                parameters.BoardId,
+                parameters.ItemName,
+                parameters.GroupId,
+                parameters.ColumnValues,
                 ct);
 
-            var output = MapToOutput(items, parameters.ParentItemId);
+            var output = MapToOutput(createdItem, parameters);
 
             _logger.LogInformation(
-                "Successfully retrieved {Count} sub-items from parent {ParentItemId} for node {NodeId}",
-                output.Count,
-                parameters.ParentItemId,
+                "Successfully created item {ItemId} on board {BoardId} for node {NodeId}",
+                createdItem.Id,
+                parameters.BoardId,
                 context.NodeId);
 
             return new ActionExecutionResult(
                 Status: ActionExecutionStatus.Succeeded,
                 Outputs: new Dictionary<string, object?>
                 {
-                    ["items"] = output.Items,
-                    ["count"] = output.Count,
-                    ["parentItemId"] = output.ParentItemId
+                    ["item"] = output.Item,
+                    ["boardId"] = output.BoardId,
+                    ["itemId"] = output.ItemId,
+                    ["groupId"] = output.GroupId
                 },
                 ErrorMessage: null);
         }
@@ -71,7 +74,7 @@ public sealed class MondayGetSubItemsAction : IWorkflowAction
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error executing monday.get-subitems for node {NodeId}", context.NodeId);
+            _logger.LogError(ex, "Error executing monday.create-item for node {NodeId}", context.NodeId);
 
             var isRetriable = IsRetriableError(ex);
 
@@ -82,14 +85,14 @@ public sealed class MondayGetSubItemsAction : IWorkflowAction
         }
     }
 
-    private GetSubItemsParameters DeserializeParameters(Dictionary<string, object?> parameters)
+    private CreateItemParameters DeserializeParameters(Dictionary<string, object?> parameters)
     {
         var json = JsonSerializer.Serialize(parameters, new JsonSerializerOptions
         {
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase
         });
 
-        var typedParameters = JsonSerializer.Deserialize<GetSubItemsParameters>(json, new JsonSerializerOptions
+        var typedParameters = JsonSerializer.Deserialize<CreateItemParameters>(json, new JsonSerializerOptions
         {
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
             PropertyNameCaseInsensitive = true
@@ -97,36 +100,46 @@ public sealed class MondayGetSubItemsAction : IWorkflowAction
 
         if (typedParameters == null)
         {
-            throw new JsonException("Failed to deserialize parameters to GetSubItemsParameters");
+            throw new JsonException("Failed to deserialize parameters to CreateItemParameters");
+        }
+
+        // Validate required parameters
+        if (string.IsNullOrWhiteSpace(typedParameters.BoardId))
+        {
+            throw new ArgumentException("BoardId is required");
+        }
+
+        if (string.IsNullOrWhiteSpace(typedParameters.ItemName))
+        {
+            throw new ArgumentException("ItemName is required");
         }
 
         return typedParameters;
     }
 
-    private GetSubItemsOutput MapToOutput(IEnumerable<MondayItemDto> items, string parentItemId)
+    private CreateItemOutput MapToOutput(MondayItemDto item, CreateItemParameters parameters)
     {
-        var itemsList = items.Select(item => new MondayItem
+        return new CreateItemOutput
         {
-            Id = item.Id,
-            ParentId = item.ParentId,
-            Title = item.Title,
-            GroupId = item.GroupId,
-            CreatedAt = item.CreatedAt,
-            UpdatedAt = item.UpdatedAt,
-            ColumnValues = item.ColumnValues.ToDictionary(
-                kvp => kvp.Key,
-                kvp => new ColumnValue
-                {
-                    Value = kvp.Value.Value,
-                    Text = kvp.Value.Text
-                })
-        }).ToList();
-
-        return new GetSubItemsOutput
-        {
-            Items = itemsList,
-            Count = itemsList.Count,
-            ParentItemId = parentItemId
+            Item = new MondayItem
+            {
+                Id = item.Id,
+                ParentId = item.ParentId,
+                Title = item.Title,
+                GroupId = item.GroupId,
+                CreatedAt = item.CreatedAt,
+                UpdatedAt = item.UpdatedAt,
+                ColumnValues = item.ColumnValues.ToDictionary(
+                    kvp => kvp.Key,
+                    kvp => new ColumnValue
+                    {
+                        Value = kvp.Value.Value,
+                        Text = kvp.Value.Text
+                    })
+            },
+            BoardId = parameters.BoardId,
+            ItemId = item.Id,
+            GroupId = item.GroupId
         };
     }
 
