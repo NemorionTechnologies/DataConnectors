@@ -1,0 +1,13 @@
+{
+  "trigger": {
+    "source": "integration-test",
+    "boardId": "board-123",
+    "groupId": "group-456",
+    "requestedBy": "qa@acme.test",
+    "timestamp": "2025-10-30T12:00:00Z"
+  },
+  "workflowVars": {
+    "itemNamePrefix": "Automation",
+    "statusLabel": "Done"
+  }
+}

@@ -1,0 +1,149 @@
+{
+  "id": "monday-complex-filter",
+  "displayName": "Complex Monday Filter Workflow",
+  "startNode": "filter-items",
+  "nodes": [
+    {
+      "id": "filter-items",
+      "actionType": "monday.get-items",
+      "parameters": {
+        "boardId": "{{ trigger.boardId }}",
+        "filter": {
+          "groupId": null,
+          "rules": [
+            {
+              "columnId": "status",
+              "operator": "eq",
+              "value": "Working on it",
+              "secondValue": null,
+              "valueType": "text"
+            }
+          ],
+          "createdAt": {
+            "from": "2025-01-01T00:00:00Z",
+            "to": "2025-12-31T23:59:59Z"
+          },
+          "condition": {
+            "rules": null,
+            "all": [
+              {
+                "rules": [
+                  {
+                    "columnId": "priority",
+                    "operator": "in",
+                    "value": "[\"High\",\"Urgent\"]",
+                    "secondValue": null,
+                    "valueType": "json"
+                  }
+                ],
+                "all": null,
+                "any": null,
+                "not": null
+              },
+              {
+                "rules": null,
+                "all": null,
+                "any": [
+                  {
+                    "rules": [
+                      {
+                        "columnId": "owner",
+                        "operator": "eq",
+                        "value": "{{ workflowVars.assigneeId }}",
+                        "secondValue": null,
+                        "valueType": "people"
+                      }
+                    ],
+                    "all": null,
+                    "any": null,
+                    "not": null
+                  },
+                  {
+                    "rules": [
+                      {
+                        "columnId": "owner",
+                        "operator": "is_empty",
+                        "value": null,
+                        "secondValue": null,
+                        "valueType": null
+                      }
+                    ],
+                    "all": null,
+                    "any": null,
+                    "not": null
+                  }
+                ],
+                "not": null
+              }
+            ],
+            "any": null,
+            "not": {
+              "rules": [
+                {
+                  "columnId": "status",
+                  "operator": "eq",
+                  "value": "Done",
+                  "secondValue": null,
+                  "valueType": "text"
+                }
+              ],
+              "all": null,
+              "any": null,
+              "not": null
+            }
+          },
+          "subItems": {
+            "mode": "any",
+            "definition": {
+              "groupId": null,
+              "rules": [
+                {
+                  "columnId": "progress",
+                  "operator": "gte",
+                  "value": "0.5",
+                  "secondValue": null,
+                  "valueType": "number"
+                }
+              ],
+              "createdAt": null,
+              "condition": null,
+              "subItems": null,
+              "updates": null,
+              "activityLogs": null
+            }
+          },
+          "updates": {
+            "mode": "any",
+            "rules": [
+              {
+                "field": "createdAt",
+                "operator": "after",
+                "value": "2025-09-01T00:00:00Z",
+                "secondValue": null,
+                "valueType": null
+              }
+            ]
+          },
+          "activityLogs": {
+            "mode": "any",
+            "rules": [
+              {
+                "field": "eventType",
+                "operator": "eq",
+                "value": "status_changed",
+                "secondValue": null
+              },
+              {
+                "field": "userId",
+                "operator": "eq",
+                "value": "{{ workflowVars.activityUserId }}",
+                "secondValue": null
+              }
+            ]
+          }
+        }
+      },
+      "edges": []
+    }
+  ]
+}

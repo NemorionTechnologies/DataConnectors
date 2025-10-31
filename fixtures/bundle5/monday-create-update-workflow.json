@@ -1,0 +1,38 @@
+{
+  "id": "monday-create-update",
+  "displayName": "Create Item Then Update Column",
+  "startNode": "create-item",
+  "nodes": [
+    {
+      "id": "create-item",
+      "actionType": "monday.create-item",
+      "parameters": {
+        "boardId": "{{ trigger.boardId }}",
+        "itemName": "{{ workflowVars.itemNamePrefix }} {{ trigger.timestamp }}",
+        "groupId": "{{ trigger.groupId }}",
+        "columnValues": {
+          "status": {
+            "label": "{{ workflowVars.statusLabel }}"
+          },
+          "date4": "{{ trigger.timestamp | string.format 'yyyy-MM-dd' }}"
+        }
+      },
+      "edges": [
+        { "targetNode": "update-status", "when": "success" }
+      ]
+    },
+    {
+      "id": "update-status",
+      "actionType": "monday.update-column",
+      "parameters": {
+        "boardId": "{{ trigger.boardId }}",
+        "itemId": "{{ context.data['create-item'].itemId }}",
+        "columnId": "status",
+        "value": {
+          "label": "Working on it"
+        }
+      }
+    }
+  ]
+}
+
