@@ -23,6 +23,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\\..\\src\\DataWorkflows.Connector.Monday\\DataWorkflows.Connector.Monday.csproj" />
+    <ProjectReference Include="..\\..\\src\\DataWorkflows.Engine.Core\\DataWorkflows.Engine.Core.csproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -30,6 +31,9 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
     <None Update="testsettings.Development.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Fixtures\\*.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>

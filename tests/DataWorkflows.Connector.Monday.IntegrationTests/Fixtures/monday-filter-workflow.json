@@ -1,0 +1,32 @@
+{
+  "id": "workflow-monday-filter",
+  "displayName": "Workflow Monday Filter Test",
+  "startNode": "fetch-items",
+  "nodes": [
+    {
+      "id": "fetch-items",
+      "actionType": "monday.get-items",
+      "parameters": {
+        "boardId": "board-123",
+        "filter": {
+          "groupId": "group-456",
+          "rules": [
+            {
+              "columnId": "status",
+              "operator": "eq",
+              "value": "Done",
+              "secondValue": null,
+              "valueType": "text"
+            }
+          ],
+          "createdAt": null,
+          "condition": null,
+          "subItems": null,
+          "updates": null,
+          "activityLogs": null
+        }
+      },
+      "edges": []
+    }
+  ]
+}
