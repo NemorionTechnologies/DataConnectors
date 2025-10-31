@@ -1521,10 +1521,10 @@ Each bundle:
 
 **Remaining bundles** (summarized):
 
-- **Bundle 4**: Parameter templating (Scriban)
-- **Bundle 5**: Monday connector (real API integration)
+- **Bundle 4**: Parameter templating (Scriban) - DONE
+- **Bundle 5**: Monday connector (real API integration) - DONE
 - **Bundle 6**: Slack connector
-- **Bundle 7**: Workflow lifecycle (Draft/Publish/Archive)
+- **Bundle 7**: Workflow lifecycle (Draft/Publish/Archive) - DONE
 - **Bundle 8**: Principal tracking
 - **Bundle 9**: Resource links & idempotency
 - **Bundle 10**: Subworkflows
