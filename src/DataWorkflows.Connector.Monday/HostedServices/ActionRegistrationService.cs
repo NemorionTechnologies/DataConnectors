@@ -92,8 +92,47 @@ public sealed class ActionRegistrationService : BackgroundService
                     outputSchema = SchemaGenerator.GenerateSchema<GetItemsOutput>(),
                     requiresAuth = true,
                     isEnabled = true
+                },
+                new
+                {
+                    actionType = "monday.get-subitems",
+                    displayName = "Get Sub-Items",
+                    description = "Retrieve sub-items from a Monday.com parent item with optional filtering",
+                    parameterSchema = SchemaGenerator.GenerateSchema<GetSubItemsParameters>(),
+                    outputSchema = SchemaGenerator.GenerateSchema<GetSubItemsOutput>(),
+                    requiresAuth = true,
+                    isEnabled = true
+                },
+                new
+                {
+                    actionType = "monday.get-item-updates",
+                    displayName = "Get Item Updates",
+                    description = "Retrieve updates from a Monday.com item with optional date filtering",
+                    parameterSchema = SchemaGenerator.GenerateSchema<GetItemUpdatesParameters>(),
+                    outputSchema = SchemaGenerator.GenerateSchema<GetItemUpdatesOutput>(),
+                    requiresAuth = true,
+                    isEnabled = true
+                },
+                new
+                {
+                    actionType = "monday.get-board-activity",
+                    displayName = "Get Board Activity",
+                    description = "Retrieve activity log from a Monday.com board with optional date filtering",
+                    parameterSchema = SchemaGenerator.GenerateSchema<GetBoardActivityParameters>(),
+                    outputSchema = SchemaGenerator.GenerateSchema<GetBoardActivityOutput>(),
+                    requiresAuth = true,
+                    isEnabled = true
+                },
+                new
+                {
+                    actionType = "monday.update-column",
+                    displayName = "Update Column Value",
+                    description = "Update a column value on a Monday.com item",
+                    parameterSchema = SchemaGenerator.GenerateSchema<UpdateColumnParameters>(),
+                    outputSchema = SchemaGenerator.GenerateSchema<UpdateColumnOutput>(),
+                    requiresAuth = true,
+                    isEnabled = true
                 }
-                // Additional actions will be added here as they are implemented
             }
         };
 

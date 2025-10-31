@@ -24,7 +24,10 @@ builder.Services.Configure<GuardrailOptions>(
 
 // Register workflow actions
 builder.Services.AddScoped<IWorkflowAction, MondayGetItemsAction>();
-// Additional actions will be registered here as they are implemented
+builder.Services.AddScoped<IWorkflowAction, MondayGetSubItemsAction>();
+builder.Services.AddScoped<IWorkflowAction, MondayGetItemUpdatesAction>();
+builder.Services.AddScoped<IWorkflowAction, MondayGetBoardActivityAction>();
+builder.Services.AddScoped<IWorkflowAction, MondayUpdateColumnAction>();
 
 // Register action registration service
 builder.Services.AddHostedService<ActionRegistrationService>();
