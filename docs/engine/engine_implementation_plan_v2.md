@@ -1525,9 +1525,9 @@ Each bundle:
 - **Bundle 5**: Monday connector (real API integration) - DONE
 - **Bundle 6**: Slack connector
 - **Bundle 7**: Workflow lifecycle (Draft/Publish/Archive) - DONE
-- **Bundle 8**: Principal tracking
+- **Bundle 8**: Principal tracking - DONE
 - **Bundle 9**: Resource links & idempotency
-- **Bundle 10**: Subworkflows
+- **Bundle 10**: Subworkflows - DONE
 - **Bundle 11**: Webhook triggers
 - **Bundle 12**: Schedule triggers
 - **Bundle 13**: Document templates
